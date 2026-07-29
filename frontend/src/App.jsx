@@ -9,7 +9,7 @@ function App() {
 
   useEffect(() => {
     const ws = new WebSocket(`ws://localhost:5173/ws?room=${ROOM}`)
-    ws.onmessage = (e) => setMessages((prev) => [...prev, e.data])
+    ws.onmessage = (e) => setMessages((prev) => [...prev, {text: e.data, mine: false}])
     wsRef.current = ws
     return () => ws.close()
   }, [])
@@ -17,6 +17,7 @@ function App() {
   const send = () => {
     if (input.trim()) {
       wsRef.current.send(input)
+      setMessages(prev => [...prev, { text: input, mine: true }])
       setInput('')
     }
   }
@@ -29,8 +30,10 @@ function App() {
 
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {messages.map((m, i) => (
-          <div key={i} className="bg-zinc-800 rounded-lg px-4 py-2 max-w-[80%]">
-            {m}
+          <div key={i} className={`flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
+            <div className={`rounded-lg px-4 py-2 max-w-[80%] ${m.mine ? 'bg-blue-600' : 'bg-zinc-800'}`}>
+              {m.text}
+            </div>
           </div>
         ))}
       </div>
