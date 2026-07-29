@@ -6,6 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+
+	"splitnow/db"
 )
 
 var upgrader = websocket.Upgrader{
@@ -36,6 +38,9 @@ func getRoom(name string) *Room {
 }
 
 func main() {
+	// connnecting to the splitnow db with root user (for now)
+	db.Connect("postgres://matestier@/splitnow?host=/var/run/postgresql")
+
 	r := gin.Default()
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
