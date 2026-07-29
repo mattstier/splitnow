@@ -2,11 +2,38 @@
 
 Bill-splitting chatroom app.
 
-# Development
+# Dependencies
 
-`sudo wscat -c ws://localhost:8080/ws?room=test` - to open a websocket in the room test
--> needs wscat through npm (`sudo npm install -g wscat`)
+- Go 1.25+
+- Node.js + npm
 
-`fuser -k 8080/tcp` -> to stop any process listening to port :8080 
+# Setup
 
+```bash
+# Backend
+go mod tidy
+go run .
 
+# Frontend (separate terminal)
+cd frontend
+npm install
+npm run dev
+```
+
+Backend runs on `:8080`, frontend on `:5173`.
+
+# Vite proxy
+
+`vite.config.js` proxies `/ws` to the Go backend. The React code connects to `localhost:5173/ws` — Vite forwards the WebSocket to `localhost:8080/ws`. No CORS config needed.
+
+# Testing WebSocket directly
+
+```bash
+npx wscat -c ws://localhost:8080/ws?room=test
+```
+
+# Kill port
+
+```bash
+fuser -k 8080/tcp
+```
