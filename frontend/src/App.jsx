@@ -9,6 +9,14 @@ function App() {
 
   // runs once, opens a websocket
   useEffect(() => {
+
+    // get all messages of the given room before opening the socket
+    fetch('/messages?room=' + ROOM)
+      .then(res => res.json())
+      .then(history => {
+      setMessages(history.map(m => ({ text: m.content, mine: false })))
+    })
+
     const ws = new WebSocket(`ws://localhost:5173/ws?room=${ROOM}`)
     // here we define the message format with a flag 'mine' to handle own messages
     ws.onmessage = (e) => setMessages((prev) => [...prev, {text: e.data, mine: false}])

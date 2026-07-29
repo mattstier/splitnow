@@ -8,11 +8,11 @@ import (
 )
 
 type Message struct {
-    ID        int
-    RoomID    string
-    Sender    string
-    Content   string
-    CreatedAt time.Time
+    ID        int       `json:"id"`
+    RoomID    string    `json:"room_id"`
+    Sender    string    `json:"sender"`
+    Content   string    `json:"content"`
+    CreatedAt time.Time `json:"created_at"`
 }
 
 func CreateMessage(roomID, sender, content string) (Message, error) {

@@ -54,13 +54,14 @@ func main() {
 	// gets all messages
 	r.GET("/messages", func(c *gin.Context) {
 		roomID := c.Query("room")
-		messages, err := db.GetMessagesByRoom(roomID)
 		if roomID == "" {
-        	c.JSON(400, gin.H{"error": "roomID required to fetch messages"})
-		} 
+			c.JSON(400, gin.H{"error": "roomID required"})
+			return
+		}
+		messages, err := db.GetMessagesByRoom(roomID)
 		if err != nil {
-        	c.JSON(500, gin.H{"error": "failed to fetch messages"})
-        	return
+			c.JSON(500, gin.H{"error": "failed to fetch messages"})
+			return
 		}
 		c.JSON(200, messages)
 	})
