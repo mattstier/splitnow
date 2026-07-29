@@ -7,8 +7,10 @@ function App() {
   const [input, setInput] = useState('')
   const wsRef = useRef(null)
 
+  // runs once, opens a websocket
   useEffect(() => {
     const ws = new WebSocket(`ws://localhost:5173/ws?room=${ROOM}`)
+    // here we define the message format with a flag 'mine' to handle own messages
     ws.onmessage = (e) => setMessages((prev) => [...prev, {text: e.data, mine: false}])
     wsRef.current = ws
     return () => ws.close()
@@ -16,8 +18,11 @@ function App() {
 
   const send = () => {
     if (input.trim()) {
+      // sends rawtext to backend
       wsRef.current.send(input)
+      // flags message as own
       setMessages(prev => [...prev, { text: input, mine: true }])
+      // clearing text box
       setInput('')
     }
   }
