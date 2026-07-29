@@ -37,6 +37,7 @@ func getRoom(name string) *Room {
 	return r
 }
 
+
 func main() {
 	// connnecting to the splitnow db with root user (for now)
 	err := db.Connect("postgres://matestier@/splitnow?host=/var/run/postgresql")
@@ -48,6 +49,22 @@ func main() {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
+
+
+	// gets all messages
+	r.GET("/messages", func(c *gin.Context) {
+		roomID := c.Query("room")
+		messages, err := db.GetMessagesByRoom(roomID)
+		if roomID == "" {
+        	c.JSON(400, gin.H{"error": "roomID required to fetch messages"})
+		} 
+		if err != nil {
+        	c.JSON(500, gin.H{"error": "failed to fetch messages"})
+        	return
+		}
+		c.JSON(200, messages)
+	})
+
 	r.GET("/ws", func(c *gin.Context) {
 		roomID := c.Query("room")
 
