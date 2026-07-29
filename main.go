@@ -23,7 +23,7 @@ type Room struct {
 var rooms = make(map[string]*Room)
 var roomsMu sync.Mutex
 
-// function creating a chatroom (returned by reference) 
+// function creating a chatroom (returned by reference)
 func getRoom(name string) *Room {
 	roomsMu.Lock()
 	defer roomsMu.Unlock()
@@ -39,7 +39,10 @@ func getRoom(name string) *Room {
 
 func main() {
 	// connnecting to the splitnow db with root user (for now)
-	db.Connect("postgres://matestier@/splitnow?host=/var/run/postgresql")
+	err := db.Connect("postgres://matestier@/splitnow?host=/var/run/postgresql")
+	if err != nil {
+		println("Failed to connect to db, reason: ", err)
+	}
 
 	r := gin.Default()
 	r.GET("/health", func(c *gin.Context) {
@@ -48,7 +51,7 @@ func main() {
 	r.GET("/ws", func(c *gin.Context) {
 		roomID := c.Query("room")
 
-		// the upgrader is reponsible for switching this HTTP connection to a WebSocket 
+		// the upgrader is reponsible for switching this HTTP connection to a WebSocket
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			return
@@ -67,13 +70,20 @@ func main() {
 		for {
 			_, msg, err := conn.ReadMessage()
 			if err != nil {
-				// if there is an error delete the connection i.e. disconnect 
+				// if there is an error delete the connection i.e. disconnect
 				room.mu.Lock()
 				delete(room.conns, conn)
 				room.mu.Unlock()
 				println("disconnected from room:", roomID)
 				break
 			}
+
+			// save message to db first in a blocking way
+			_, errm := db.CreateMessage("test", "John Doe", string(msg))
+			if errm != nil {
+				println("Failed to send message, reason: ", errm)
+			}
+
 			println("received:", string(msg))
 
 			room.mu.Lock()
