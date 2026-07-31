@@ -10,7 +10,24 @@ function App() {
   const [rooms, setRooms] = useState([])
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
+  const [newRoomName, setNewRoomName] = useState('')
   const wsRef = useRef(null)
+
+  // registers a new room and joins it
+  const createRoom = () => {
+    if (!newRoomName.trim()) return
+    fetch('/rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newRoomName, created_by: 1 })
+    })
+      .then(res => { if (!res.ok) return; return res.json() })
+      .then(r => {
+        if (!r) return
+        setRooms(prev => [...prev, r])
+        setRoom({ id: r.id, name: r.name })
+      })
+  }
 
   // load the list of rooms to join
   useEffect(() => {
@@ -57,6 +74,22 @@ function App() {
       <div className="flex flex-col h-screen bg-zinc-900 text-white">
         <div className="border-b border-zinc-700 p-4">
           <h1 className="text-lg font-semibold">Rooms</h1>
+        </div>
+
+        <div className="border-b border-zinc-700 p-4 flex gap-2">
+          <input
+            className="flex-1 bg-zinc-800 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+            value={newRoomName}
+            onChange={(e) => setNewRoomName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && createRoom()}
+            placeholder="New room name..."
+          />
+          <button
+            className="bg-blue-600 hover:bg-blue-700 rounded-lg px-6 py-2 font-medium cursor-pointer"
+            onClick={createRoom}
+          >
+            Create
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
