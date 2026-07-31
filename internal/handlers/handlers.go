@@ -5,15 +5,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"splitnow/db"
+	"splitnow/internal/types"
 )
 
 type Store interface {
-	CreateMessage(roomID int, sender, content string) (db.Message, error)
-	GetMessagesByRoom(roomID int) ([]db.Message, error)
-	CreateRoom(name string, creator int) (db.Room, error)
-	GetAllRooms() ([]db.Room, error)
-	GetRoomsWithName(name string) ([]db.Room, error)
+	CreateMessage(roomID int, sender, content string) (types.Message, error)
+	GetMessagesByRoom(roomID int) ([]types.Message, error)
+	CreateRoom(name string, creator int) (types.Room, error)
+	GetAllRooms() ([]types.Room, error)
+	GetRoomsWithName(name string) ([]types.Room, error)
 }
 
 func Health(c *gin.Context) {

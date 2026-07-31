@@ -2,30 +2,25 @@ package db
 
 import (
 	"context"
+
 	"github.com/jackc/pgx/v5"
-	"time"
+
+	"splitnow/internal/types"
 )
 
-type Room struct {
-	ID        int       `json:"id"`
-	Name      string    `json:"name"`
-	CreatedBy int       `json:"created_by"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-func CreateRoom(name string, creator int) (Room, error) {
+func CreateRoom(name string, creator int) (types.Room, error) {
 	row := Pool.QueryRow(context.Background(),
 		`INSERT INTO rooms (name, created_by)
          VALUES ($1, $2)
          RETURNING id, name, created_by, created_at`,
 		name, creator)
 
-	var r Room
+	var r types.Room
 	err := row.Scan(&r.ID, &r.Name, &r.CreatedBy, &r.CreatedAt)
 	return r, err
 }
 
-func GetAllRooms() ([]Room, error) {
+func GetAllRooms() ([]types.Room, error) {
 	rows, err := Pool.Query(context.Background(),
 		`SELECT id, name, created_by, created_at
          FROM rooms`)
@@ -33,15 +28,15 @@ func GetAllRooms() ([]Room, error) {
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, pgx.RowToStructByName[Room])
+	return pgx.CollectRows(rows, pgx.RowToStructByName[types.Room])
 }
 
-func GetRoomsWithName(name string) ([]Room, error) {
+func GetRoomsWithName(name string) ([]types.Room, error) {
 	rows, err := Pool.Query(context.Background(),
 		`SELECT id, name, created_by, created_at
          FROM rooms WHERE name = $1 ORDER BY created_at`, name)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, pgx.RowToStructByName[Room])
+	return pgx.CollectRows(rows, pgx.RowToStructByName[types.Room])
 }
