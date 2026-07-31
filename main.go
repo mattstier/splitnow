@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"sync"
 
@@ -97,18 +98,20 @@ func main() {
 			}
 
 			// save message to db first in a blocking way
-			_, errm := db.CreateMessage("test", "John Doe", string(msg))
+			saved, errm := db.CreateMessage(roomID, "John Doe", string(msg))
 			if errm != nil {
 				println("Failed to send message, reason: ", errm)
+				continue
 			}
 
 			println("received:", string(msg))
 
+			// broadcast the saved message as JSON to everyone (else) in the same room
+			data, _ := json.Marshal(saved)
 			room.mu.Lock()
-			// broadcasts the message to everyone (else) in the same room
 			for other := range room.conns {
 				if other != conn {
-					other.WriteMessage(websocket.TextMessage, msg)
+					other.WriteMessage(websocket.TextMessage, data)
 				}
 			}
 			room.mu.Unlock()
