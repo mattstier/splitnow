@@ -1,11 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+
+	"splitnow/db"
 )
 
 var upgrader = websocket.Upgrader{
@@ -21,7 +24,7 @@ type Room struct {
 var rooms = make(map[string]*Room)
 var roomsMu sync.Mutex
 
-// function creating a chatroom (returned by reference) 
+// function creating a chatroom (returned by reference)
 func getRoom(name string) *Room {
 	roomsMu.Lock()
 	defer roomsMu.Unlock()
@@ -35,15 +38,39 @@ func getRoom(name string) *Room {
 	return r
 }
 
+
 func main() {
+	// connnecting to the splitnow db with root user (for now)
+	err := db.Connect("postgres://matestier@/splitnow?host=/var/run/postgresql")
+	if err != nil {
+		println("Failed to connect to db, reason: ", err)
+	}
+
 	r := gin.Default()
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
+
+
+	// gets all messages
+	r.GET("/messages", func(c *gin.Context) {
+		roomID := c.Query("room")
+		if roomID == "" {
+			c.JSON(400, gin.H{"error": "roomID required"})
+			return
+		}
+		messages, err := db.GetMessagesByRoom(roomID)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "failed to fetch messages"})
+			return
+		}
+		c.JSON(200, messages)
+	})
+
 	r.GET("/ws", func(c *gin.Context) {
 		roomID := c.Query("room")
 
-		// the upgrader is reponsible for switching this HTTP connection to a WebSocket 
+		// the upgrader is reponsible for switching this HTTP connection to a WebSocket
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			return
@@ -62,20 +89,29 @@ func main() {
 		for {
 			_, msg, err := conn.ReadMessage()
 			if err != nil {
-				// if there is an error delete the connection i.e. disconnect 
+				// if there is an error delete the connection i.e. disconnect
 				room.mu.Lock()
 				delete(room.conns, conn)
 				room.mu.Unlock()
 				println("disconnected from room:", roomID)
 				break
 			}
+
+			// save message to db first in a blocking way
+			saved, errm := db.CreateMessage(roomID, "John Doe", string(msg))
+			if errm != nil {
+				println("Failed to send message, reason: ", errm)
+				continue
+			}
+
 			println("received:", string(msg))
 
+			// broadcast the saved message as JSON to everyone (else) in the same room
+			data, _ := json.Marshal(saved)
 			room.mu.Lock()
-			// broadcasts the message to everyone (else) in the same room
 			for other := range room.conns {
 				if other != conn {
-					other.WriteMessage(websocket.TextMessage, msg)
+					other.WriteMessage(websocket.TextMessage, data)
 				}
 			}
 			room.mu.Unlock()

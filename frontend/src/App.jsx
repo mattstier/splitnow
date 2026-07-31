@@ -2,6 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 
 const ROOM = 'test'
 
+const formatTime = (ts) => {
+  if (!ts) return ''
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
 function App() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -9,9 +14,19 @@ function App() {
 
   // runs once, opens a websocket
   useEffect(() => {
+    // get all messages of the given room before opening the socket
+    fetch('/messages?room=' + ROOM)
+      .then(res => res.json())
+      .then(history => {
+      setMessages(history.map(m => ({ text: m.content, sender: m.sender, created_at: m.created_at, mine: false })))
+    })
+
     const ws = new WebSocket(`ws://localhost:5173/ws?room=${ROOM}`)
     // here we define the message format with a flag 'mine' to handle own messages
-    ws.onmessage = (e) => setMessages((prev) => [...prev, {text: e.data, mine: false}])
+    ws.onmessage = (e) => {
+      const d = JSON.parse(e.data)
+      setMessages((prev) => [...prev, { text: d.content, sender: d.sender, created_at: d.created_at, mine: false }])
+    }
     wsRef.current = ws
     return () => ws.close()
   }, [])
@@ -21,7 +36,7 @@ function App() {
       // sends rawtext to backend
       wsRef.current.send(input)
       // flags message as own
-      setMessages(prev => [...prev, { text: input, mine: true }])
+      setMessages(prev => [...prev, { text: input, sender: 'You', created_at: new Date().toISOString(), mine: true }])
       // clearing text box
       setInput('')
     }
@@ -33,11 +48,16 @@ function App() {
         <h1 className="text-lg font-semibold">Room: {ROOM}</h1>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
-            <div className={`rounded-lg px-4 py-2 max-w-[80%] ${m.mine ? 'bg-blue-600' : 'bg-zinc-800'}`}>
-              {m.text}
+            <div className="max-w-[80%]">
+              <div className={`text-xs text-zinc-500 mb-1 ${m.mine ? 'text-right' : 'text-left'}`}>
+                {m.sender} · {formatTime(m.created_at)}
+              </div>
+              <div className={`rounded-lg px-4 py-2 ${m.mine ? 'bg-blue-600' : 'bg-zinc-800'}`}>
+                {m.text}
+              </div>
             </div>
           </div>
         ))}
