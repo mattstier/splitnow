@@ -14,34 +14,46 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-type Room struct {
+type chatRoom struct {
 	mu    sync.Mutex
 	conns map[*websocket.Conn]struct{}
 }
 
 // global map of all chatrooms and its mutex lock
-var rooms = make(map[string]*Room)
-var roomsMu sync.Mutex
+var chatRooms = make(map[string]*chatRoom)
+var chatRoomsMu sync.Mutex
 
 // function creating a chatroom (returned by reference)
-func getRoom(name string) *Room {
-	roomsMu.Lock()
-	defer roomsMu.Unlock()
-	if r, ok := rooms[name]; ok {
+func getChatRoom(name string) *chatRoom {
+	chatRoomsMu.Lock()
+	defer chatRoomsMu.Unlock()
+	if r, ok := chatRooms[name]; ok {
 		return r
 	}
 
 	// chatroom initialized with an empty map of websocket.Conn
-	r := &Room{conns: make(map[*websocket.Conn]struct{})}
-	rooms[name] = r
+	r := &chatRoom{conns: make(map[*websocket.Conn]struct{})}
+	chatRooms[name] = r
 	return r
 }
 
 func WS(s Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roomID, err := strconv.Atoi(c.Query("room"))
+
 		if err != nil {
 			c.JSON(400, gin.H{"error": "roomID required"})
+			return
+		}
+
+		// check if the room exists before connecting to it
+		exists, err := s.RoomExists(roomID)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "failed to check room"})
+			return
+		}
+		if !exists {
+			c.JSON(404, gin.H{"error": "room not found"})
 			return
 		}
 
@@ -51,7 +63,7 @@ func WS(s Store) gin.HandlerFunc {
 			return
 		}
 
-		room := getRoom(strconv.Itoa(roomID))
+		room := getChatRoom(strconv.Itoa(roomID))
 
 		// NOTE: you need to lock and unlock the room's mutex lock
 		// so that the concurrent websockets don't hit race conditions on the connection list

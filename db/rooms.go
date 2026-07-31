@@ -8,6 +8,14 @@ import (
 	"splitnow/internal/types"
 )
 
+// check if a room with id exists
+func RoomExists(roomID int) (bool, error) {
+	var exists bool
+	err := Pool.QueryRow(context.Background(),
+		`SELECT EXISTS(SELECT 1 FROM rooms WHERE id = $1)`, roomID).Scan(&exists)
+	return exists, err
+}
+
 func CreateRoom(name string, creator int) (types.Room, error) {
 	row := Pool.QueryRow(context.Background(),
 		`INSERT INTO rooms (name, created_by)

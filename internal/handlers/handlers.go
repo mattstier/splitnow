@@ -14,6 +14,7 @@ type Store interface {
 	CreateRoom(name string, creator int) (types.Room, error)
 	GetAllRooms() ([]types.Room, error)
 	GetRoomsWithName(name string) ([]types.Room, error)
+	RoomExists(roomID int)(bool, error)
 }
 
 func Health(c *gin.Context) {

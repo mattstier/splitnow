@@ -4,6 +4,10 @@ import "splitnow/internal/types"
 
 type Store struct{}
 
+func (Store) RoomExists(roomID int) (bool, error) {
+	return RoomExists(roomID)
+}
+
 func (Store) CreateMessage(roomID int, sender, content string) (types.Message, error) {
 	return CreateMessage(roomID, sender, content)
 }
