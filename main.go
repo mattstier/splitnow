@@ -1,43 +1,11 @@
 package main
 
 import (
-	"encoding/json"
-	"net/http"
-	"strconv"
-	"sync"
-
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 
 	"splitnow/db"
+	"splitnow/internal/handlers"
 )
-
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
-
-type Room struct {
-	mu    sync.Mutex
-	conns map[*websocket.Conn]struct{}
-}
-
-// global map of all chatrooms and its mutex lock
-var rooms = make(map[string]*Room)
-var roomsMu sync.Mutex
-
-// function creating a chatroom (returned by reference)
-func getRoom(name string) *Room {
-	roomsMu.Lock()
-	defer roomsMu.Unlock()
-	if r, ok := rooms[name]; ok {
-		return r
-	}
-
-	// chatroom initialized with an empty map of websocket.Conn
-	r := &Room{conns: make(map[*websocket.Conn]struct{})}
-	rooms[name] = r
-	return r
-}
 
 func main() {
 	// connnecting to the splitnow db with root user (for now)
@@ -47,117 +15,10 @@ func main() {
 	}
 
 	r := gin.Default()
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
-	})
-
-	// gets all messages by roomID
-	r.GET("/messages", func(c *gin.Context) {
-		roomID, err := strconv.Atoi(c.Query("room"))
-		if err != nil {
-			c.JSON(400, gin.H{"error": "roomID required"})
-			return
-		}
-		messages, err := db.GetMessagesByRoom(roomID)
-		if err != nil {
-			c.JSON(500, gin.H{"error": "failed to fetch messages"})
-			return
-		}
-		c.JSON(200, messages)
-	})
-
-	// create a room with a name and a creator with userID
-	r.POST("/rooms", func(c *gin.Context) {
-		var input struct {
-			Name      string `json:"name"`
-			CreatedBy int    `json:"created_by"`
-		}
-		if err := c.ShouldBindJSON(&input); err != nil {
-			c.JSON(400, gin.H{"error": "invalid body"})
-			return
-		}
-
-		room, err := db.CreateRoom(input.Name, input.CreatedBy)
-		if err != nil {
-			c.JSON(500, gin.H{"error": "failed to create room"})
-			return
-		}
-		c.JSON(201, room)
-	})
-
-	// gets all rooms (optionally filtered by name)
-	r.GET("/rooms", func(c *gin.Context) {
-		if roomName := c.Query("name"); roomName != "" {
-			rooms, err := db.GetRoomsWithName(roomName)
-			if err != nil {
-				c.JSON(500, gin.H{"error": "failed to fetch rooms"})
-				return
-			}
-			c.JSON(200, rooms)
-			return
-		}
-
-		rooms, err := db.GetAllRooms()
-		if err != nil {
-			c.JSON(500, gin.H{"error": "failed to fetch rooms"})
-			return
-		}
-		c.JSON(200, rooms)
-	})
-
-	r.GET("/ws", func(c *gin.Context) {
-		roomID, err := strconv.Atoi(c.Query("room"))
-		if err != nil {
-			c.JSON(400, gin.H{"error": "roomID required"})
-			return
-		}
-
-		// the upgrader is reponsible for switching this HTTP connection to a WebSocket
-		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-		if err != nil {
-			return
-		}
-
-		room := getRoom(strconv.Itoa(roomID))
-
-		// NOTE: you need to lock and unlock the room's mutex lock
-		// so that the concurrent websockets don't hit race conditions on the connection list
-		room.mu.Lock()
-		room.conns[conn] = struct{}{}
-		room.mu.Unlock()
-
-		println("connected to room:", roomID)
-
-		for {
-			_, msg, err := conn.ReadMessage()
-			if err != nil {
-				// if there is an error delete the connection i.e. disconnect
-				room.mu.Lock()
-				delete(room.conns, conn)
-				room.mu.Unlock()
-				println("disconnected from room:", roomID)
-				break
-			}
-
-			// save message to db first in a blocking way
-			saved, errm := db.CreateMessage(roomID, "John Doe", string(msg))
-			if errm != nil {
-				println("Failed to send message, reason: ", errm)
-				continue
-			}
-
-			println("received:", string(msg))
-
-			// broadcast the saved message as JSON to everyone (else) in the same room
-			data, _ := json.Marshal(saved)
-			room.mu.Lock()
-			for other := range room.conns {
-				if other != conn {
-					other.WriteMessage(websocket.TextMessage, data)
-				}
-			}
-			room.mu.Unlock()
-		}
-	})
+	r.GET("/health", handlers.Health)
+	r.GET("/messages", handlers.GetMessages)
+	r.POST("/rooms", handlers.CreateRoom)
+	r.GET("/rooms", handlers.GetRooms)
+	r.GET("/ws", handlers.WS)
 	r.Run()
 }
