@@ -51,7 +51,7 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	// gets all messages
+	// gets all messages by roomID
 	r.GET("/messages", func(c *gin.Context) {
 		roomID, err := strconv.Atoi(c.Query("room"))
 		if err != nil {
@@ -66,6 +66,7 @@ func main() {
 		c.JSON(200, messages)
 	})
 
+	// create a room with a name and a creator with userID
 	r.POST("/rooms", func(c *gin.Context) {
 		var input struct {
 			Name      string `json:"name"`
@@ -82,6 +83,26 @@ func main() {
 			return
 		}
 		c.JSON(201, room)
+	})
+
+	// gets all rooms (optionally filtered by name)
+	r.GET("/rooms", func(c *gin.Context) {
+		if roomName := c.Query("name"); roomName != "" {
+			rooms, err := db.GetRoomsWithName(roomName)
+			if err != nil {
+				c.JSON(500, gin.H{"error": "failed to fetch rooms"})
+				return
+			}
+			c.JSON(200, rooms)
+			return
+		}
+
+		rooms, err := db.GetAllRooms()
+		if err != nil {
+			c.JSON(500, gin.H{"error": "failed to fetch rooms"})
+			return
+		}
+		c.JSON(200, rooms)
 	})
 
 	r.GET("/ws", func(c *gin.Context) {

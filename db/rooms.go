@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"github.com/jackc/pgx/v5"
 	"time"
 )
 
@@ -22,4 +23,25 @@ func CreateRoom(name string, creator int) (Room, error) {
 	var r Room
 	err := row.Scan(&r.ID, &r.Name, &r.CreatedBy, &r.CreatedAt)
 	return r, err
+}
+
+func GetAllRooms() ([]Room, error) {
+	rows, err := Pool.Query(context.Background(),
+		`SELECT id, name, created_by, created_at
+         FROM rooms`)
+
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[Room])
+}
+
+func GetRoomsWithName(name string) ([]Room, error) {
+	rows, err := Pool.Query(context.Background(),
+		`SELECT id, name, created_by, created_at
+         FROM rooms WHERE name = $1 ORDER BY created_at`, name)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[Room])
 }
