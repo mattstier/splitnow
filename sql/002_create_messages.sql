@@ -1,6 +1,6 @@
 CREATE TABLE messages (
     id SERIAL PRIMARY KEY,
-    room_id TEXT NOT NULL,
+    room_id INT REFERENCES rooms(id), 
     sender TEXT NOT NULL,
     content TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()

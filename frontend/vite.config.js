@@ -12,6 +12,9 @@ export default defineConfig({
       },
       '/messages': {
         target: 'http://localhost:8080'
+      },
+      '/rooms': {
+        target: 'http://localhost:8080'
       }
     }
   }

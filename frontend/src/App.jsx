@@ -1,27 +1,53 @@
 import { useState, useEffect, useRef } from 'react'
 
-const ROOM = 'test'
-
 const formatTime = (ts) => {
   if (!ts) return ''
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 function App() {
+  const [room, setRoom] = useState(null)
+  const [rooms, setRooms] = useState([])
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
+  const [newRoomName, setNewRoomName] = useState('')
   const wsRef = useRef(null)
 
-  // runs once, opens a websocket
+  // registers a new room and joins it
+  const createRoom = () => {
+    if (!newRoomName.trim()) return
+    fetch('/rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newRoomName, created_by: 1 })
+    })
+      .then(res => { if (!res.ok) return; return res.json() })
+      .then(r => {
+        if (!r) return
+        setRooms(prev => [...prev, r])
+        setRoom({ id: r.id, name: r.name })
+      })
+  }
+
+  // load the list of rooms to join
   useEffect(() => {
+    fetch('/rooms')
+      .then(res => res.json())
+      .then(setRooms)
+  }, [])
+
+  // runs when joining a room, opens a websocket
+  useEffect(() => {
+    if (!room) return
+
     // get all messages of the given room before opening the socket
-    fetch('/messages?room=' + ROOM)
+    fetch('/messages?room=' + room.id)
       .then(res => res.json())
       .then(history => {
       setMessages(history.map(m => ({ text: m.content, sender: m.sender, created_at: m.created_at, mine: false })))
     })
 
-    const ws = new WebSocket(`ws://localhost:5173/ws?room=${ROOM}`)
+    const ws = new WebSocket(`ws://localhost:5173/ws?room=${room.id}`)
     // here we define the message format with a flag 'mine' to handle own messages
     ws.onmessage = (e) => {
       const d = JSON.parse(e.data)
@@ -29,7 +55,7 @@ function App() {
     }
     wsRef.current = ws
     return () => ws.close()
-  }, [])
+  }, [room?.id])
 
   const send = () => {
     if (input.trim()) {
@@ -42,10 +68,57 @@ function App() {
     }
   }
 
+  // room picker view
+  if (!room) {
+    return (
+      <div className="flex flex-col h-screen bg-zinc-900 text-white">
+        <div className="border-b border-zinc-700 p-4">
+          <h1 className="text-lg font-semibold">Rooms</h1>
+        </div>
+
+        <div className="border-b border-zinc-700 p-4 flex gap-2">
+          <input
+            className="flex-1 bg-zinc-800 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+            value={newRoomName}
+            onChange={(e) => setNewRoomName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && createRoom()}
+            placeholder="New room name..."
+          />
+          <button
+            className="bg-blue-600 hover:bg-blue-700 rounded-lg px-6 py-2 font-medium cursor-pointer"
+            onClick={createRoom}
+          >
+            Create
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {rooms.length === 0 && <p className="text-zinc-500">no rooms yet</p>}
+          {rooms.map(r => (
+            <button
+              key={r.id}
+              onClick={() => setRoom({ id: r.id, name: r.name })}
+              className="w-full text-left bg-zinc-800 hover:bg-zinc-700 rounded-lg px-4 py-2 font-medium cursor-pointer"
+            >
+              {r.name}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // chat view
   return (
     <div className="flex flex-col h-screen bg-zinc-900 text-white">
-      <div className="border-b border-zinc-700 p-4">
-        <h1 className="text-lg font-semibold">Room: {ROOM}</h1>
+      <div className="border-b border-zinc-700 p-4 flex items-center gap-3">
+        <button
+          onClick={() => setRoom(null)}
+          className="bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 py-1 text-sm cursor-pointer"
+        >
+          ← Back
+        </button>
+        <h1 className="text-lg font-semibold">Room: {room.name}</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
