@@ -39,7 +39,6 @@ func getRoom(name string) *Room {
 	return r
 }
 
-
 func main() {
 	// connnecting to the splitnow db with root user (for now)
 	err := db.Connect("postgres://matestier@/splitnow?host=/var/run/postgresql")
@@ -51,7 +50,6 @@ func main() {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
-
 
 	// gets all messages
 	r.GET("/messages", func(c *gin.Context) {
@@ -66,6 +64,24 @@ func main() {
 			return
 		}
 		c.JSON(200, messages)
+	})
+
+	r.POST("/rooms", func(c *gin.Context) {
+		var input struct {
+			Name      string `json:"name"`
+			CreatedBy int    `json:"created_by"`
+		}
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(400, gin.H{"error": "invalid body"})
+			return
+		}
+
+		room, err := db.CreateRoom(input.Name, input.CreatedBy)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "failed to create room"})
+			return
+		}
+		c.JSON(201, room)
 	})
 
 	r.GET("/ws", func(c *gin.Context) {
