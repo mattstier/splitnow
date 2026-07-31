@@ -30,8 +30,8 @@ func GetMessages(c *gin.Context) {
 // create a room with a name and a creator with userID
 func CreateRoom(c *gin.Context) {
 	var input struct {
-		Name      string `json:"name"`
-		CreatedBy int    `json:"created_by"`
+		Name      string `json:"name" binding:"required"`
+		CreatedBy int    `json:"created_by" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(400, gin.H{"error": "invalid body"})
