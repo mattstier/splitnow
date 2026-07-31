@@ -14,11 +14,13 @@ func main() {
 		println("Failed to connect to db, reason: ", err)
 	}
 
+	store := db.Store{}
+
 	r := gin.Default()
 	r.GET("/health", handlers.Health)
-	r.GET("/messages", handlers.GetMessages)
-	r.POST("/rooms", handlers.CreateRoom)
-	r.GET("/rooms", handlers.GetRooms)
-	r.GET("/ws", handlers.WS)
+	r.GET("/messages", handlers.GetMessages(store))
+	r.POST("/rooms", handlers.CreateRoom(store))
+	r.GET("/rooms", handlers.GetRooms(store))
+	r.GET("/ws", handlers.WS(store))
 	r.Run()
 }
