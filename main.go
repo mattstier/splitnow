@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"sync"
 
 	"github.com/gin-gonic/gin"
@@ -54,8 +55,8 @@ func main() {
 
 	// gets all messages
 	r.GET("/messages", func(c *gin.Context) {
-		roomID := c.Query("room")
-		if roomID == "" {
+		roomID, err := strconv.Atoi(c.Query("room"))
+		if err != nil {
 			c.JSON(400, gin.H{"error": "roomID required"})
 			return
 		}
@@ -68,7 +69,11 @@ func main() {
 	})
 
 	r.GET("/ws", func(c *gin.Context) {
-		roomID := c.Query("room")
+		roomID, err := strconv.Atoi(c.Query("room"))
+		if err != nil {
+			c.JSON(400, gin.H{"error": "roomID required"})
+			return
+		}
 
 		// the upgrader is reponsible for switching this HTTP connection to a WebSocket
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -76,7 +81,7 @@ func main() {
 			return
 		}
 
-		room := getRoom(roomID)
+		room := getRoom(strconv.Itoa(roomID))
 
 		// NOTE: you need to lock and unlock the room's mutex lock
 		// so that the concurrent websockets don't hit race conditions on the connection list

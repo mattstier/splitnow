@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 
-const ROOM = 'test'
+// ROOM with id=1 is reserved for the room "test"
+const ROOM = 1 
 
 const formatTime = (ts) => {
   if (!ts) return ''
