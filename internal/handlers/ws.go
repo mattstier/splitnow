@@ -67,8 +67,17 @@ type errorFrame struct {
 	Message string `json:"message"`
 }
 
-func (ws wsDeps) handleSubscribe(client *wsClient, frame msgFrame) {
+func (room *chatRoom) join(client *wsClient, rdb *redis.Client) {
+	room.mu.Lock()
+	defer room.mu.Unlock()
+	if room.pubsub == nil {          // redis: first member opens subscription
+		room.pubsub = rdb.Subscribe(context.Background(), "room:"+strconv.Itoa(room.id))
+		go room.consume()
+	}
+	room.conns[client] = struct{}{}  // local: register delivery target
+}
 
+func (ws wsDeps) handleSubscribe(client *wsClient, frame msgFrame) {
 	// only allow subscribing to existing rooms
 	exists, err := ws.store.RoomExists(frame.Room)
 	if err != nil {
@@ -81,16 +90,11 @@ func (ws wsDeps) handleSubscribe(client *wsClient, frame msgFrame) {
 		return
 	}
 	room := getChatRoom(frame.Room)
-	room.mu.Lock()
 
-	// first local member of this room opens the redis subscription so we
-	// receive messages published by other instances too
-	if room.pubsub == nil {
-		room.pubsub = ws.redisClient.Subscribe(context.Background(), "room:"+strconv.Itoa(room.id))
-		go room.consume()
-	}
-	room.conns[client] = struct{}{}
-	room.mu.Unlock()
+	// subscribe on redis and register locally
+	room.join(client, ws.redisClient)
+
+	// update the local rooms of the client
 	client.mu.Lock()
 	client.rooms[frame.Room] = struct{}{}
 	client.mu.Unlock()
