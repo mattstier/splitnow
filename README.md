@@ -6,10 +6,18 @@ Bill-splitting chatroom app.
 
 - Go 1.25+
 - Node.js + npm
+- PostgreSQL
+- Redis (via Docker)
 
 # Setup
 
 ```bash
+# Database
+sudo systemctl start postgresql
+
+# Redis (Docker container)
+docker start splitnow-redis   # create once with: docker run -d --name splitnow-redis -p 6379:6379 redis:8.10
+
 # Backend
 go mod tidy
 go run .
@@ -20,7 +28,7 @@ npm install
 npm run dev
 ```
 
-Backend runs on `:8080`, frontend on `:5173`.
+Backend runs on `:8080`, frontend on `:5173`, Redis on `:6379`.
 
 # Vite proxy
 
@@ -28,8 +36,13 @@ Backend runs on `:8080`, frontend on `:5173`.
 
 # Testing WebSocket directly
 
+A single connection can subscribe to and leave multiple rooms via JSON frames:
+
 ```bash
-npx wscat -c ws://localhost:8080/ws?room=test
+npx wscat -c ws://localhost:8080/ws
+> {"type":"subscribe","room":1}
+> {"type":"send","room":1,"content":"hello"}
+> {"type":"unsubscribe","room":1}
 ```
 
 # Kill port
