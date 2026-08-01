@@ -47,10 +47,12 @@ function App() {
       setMessages(history.map(m => ({ text: m.content, sender: m.sender, created_at: m.created_at, mine: false })))
     })
 
-    const ws = new WebSocket(`ws://localhost:5173/ws?room=${room.id}`)
+    const ws = new WebSocket('ws://localhost:5173/ws')
+    ws.onopen = () => ws.send(JSON.stringify({ type: 'subscribe', room: room.id }))
     // here we define the message format with a flag 'mine' to handle own messages
     ws.onmessage = (e) => {
       const d = JSON.parse(e.data)
+      if (d.content === undefined) return
       setMessages((prev) => [...prev, { text: d.content, sender: d.sender, created_at: d.created_at, mine: false }])
     }
     wsRef.current = ws
@@ -60,7 +62,7 @@ function App() {
   const send = () => {
     if (input.trim()) {
       // sends rawtext to backend
-      wsRef.current.send(input)
+      wsRef.current.send(JSON.stringify({ type: 'send', room: room.id, content: input }))
       // flags message as own
       setMessages(prev => [...prev, { text: input, sender: 'You', created_at: new Date().toISOString(), mine: true }])
       // clearing text box
