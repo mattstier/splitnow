@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/redis/go-redis/v9"
 )
 
 var upgrader = websocket.Upgrader{
@@ -14,9 +17,12 @@ var upgrader = websocket.Upgrader{
 }
 
 // chatRoom is the set of clients subscribed to one room
+// It also owns the redis subscription for that room
 type chatRoom struct {
-	mu    sync.Mutex
-	conns map[*wsClient]struct{}
+	mu     sync.Mutex
+	conns  map[*wsClient]struct{}
+	id     int
+	pubsub *redis.PubSub // pubsub is non-nil as long as at least one client is subscribed to the room
 }
 
 // client is one websocket connection and the rooms it is subscribed to
@@ -24,6 +30,11 @@ type wsClient struct {
 	mu    sync.Mutex
 	conn  *websocket.Conn
 	rooms map[int]struct{}
+}
+
+type wsDeps struct {
+	store       Store
+	redisClient *redis.Client
 }
 
 // global map of all chatrooms and its mutex lock
@@ -37,7 +48,7 @@ func getChatRoom(roomID int) *chatRoom {
 	if room, ok := chatRooms[roomID]; ok {
 		return room
 	}
-	room := &chatRoom{conns: make(map[*wsClient]struct{})}
+	room := &chatRoom{id: roomID, conns: make(map[*wsClient]struct{})}
 	chatRooms[roomID] = room
 	return room
 }
@@ -56,7 +67,52 @@ type errorFrame struct {
 	Message string `json:"message"`
 }
 
-func WS(s Store) gin.HandlerFunc {
+func (ws wsDeps) handleSubscribe(client *wsClient, frame msgFrame) {
+
+	// only allow subscribing to existing rooms
+	exists, err := ws.store.RoomExists(frame.Room)
+	if err != nil {
+		println("failed to check room:", err)
+		return
+	}
+	if !exists {
+		data, _ := json.Marshal(errorFrame{Type: "error", Room: frame.Room, Message: "room not found"})
+		client.conn.WriteMessage(websocket.TextMessage, data)
+		return
+	}
+	room := getChatRoom(frame.Room)
+	room.mu.Lock()
+
+	// first local member of this room opens the redis subscription so we
+	// receive messages published by other instances too
+	if room.pubsub == nil {
+		room.pubsub = ws.redisClient.Subscribe(context.Background(), "room:"+strconv.Itoa(room.id))
+		go room.consume()
+	}
+	room.conns[client] = struct{}{}
+	room.mu.Unlock()
+	client.mu.Lock()
+	client.rooms[frame.Room] = struct{}{}
+	client.mu.Unlock()
+	println("subscribed to room:", frame.Room)
+}
+
+// consume runs in its own goroutine per room: every message published to the
+// room's redis channel is forwarded to all locally connected clients.
+// stops when the subscription is closed
+func (room *chatRoom) consume() {
+	ch := room.pubsub.Channel()
+	for msg := range ch {
+		room.mu.Lock()
+		for other := range room.conns {
+			other.conn.WriteMessage(websocket.TextMessage, []byte(msg.Payload))
+		}
+		room.mu.Unlock()
+	}
+	room.pubsub.Close()
+}
+
+func WS(s Store, redisClient *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
@@ -64,6 +120,7 @@ func WS(s Store) gin.HandlerFunc {
 		}
 
 		client := &wsClient{conn: conn, rooms: make(map[int]struct{})}
+		deps := wsDeps{store: s, redisClient: redisClient}
 		for {
 			_, msg, err := conn.ReadMessage()
 			if err != nil {
@@ -92,26 +149,7 @@ func WS(s Store) gin.HandlerFunc {
 
 			switch frame.Type {
 			case "subscribe":
-				// only allow subscribing to existing rooms
-				exists, err := s.RoomExists(frame.Room)
-				if err != nil {
-					println("failed to check room:", err)
-					continue
-				}
-				if !exists {
-					data, _ := json.Marshal(errorFrame{Type: "error", Room: frame.Room, Message: "room not found"})
-					conn.WriteMessage(websocket.TextMessage, data)
-					continue
-				}
-				room := getChatRoom(frame.Room)
-				client.mu.Lock()
-				client.rooms[frame.Room] = struct{}{}
-				client.mu.Unlock()
-				room.mu.Lock()
-				room.conns[client] = struct{}{}
-				room.mu.Unlock()
-				println("subscribed to room:", frame.Room)
-
+				deps.handleSubscribe(client, frame)
 			case "unsubscribe":
 				client.mu.Lock()
 				delete(client.rooms, frame.Room)
