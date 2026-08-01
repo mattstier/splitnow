@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"sync"
 
 	"github.com/gin-gonic/gin"
@@ -14,94 +13,143 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
+// chatRoom is the set of clients subscribed to one room
 type chatRoom struct {
 	mu    sync.Mutex
-	conns map[*websocket.Conn]struct{}
+	conns map[*wsClient]struct{}
+}
+
+// client is one websocket connection and the rooms it is subscribed to
+type wsClient struct {
+	mu    sync.Mutex
+	conn  *websocket.Conn
+	rooms map[int]struct{}
 }
 
 // global map of all chatrooms and its mutex lock
-var chatRooms = make(map[string]*chatRoom)
+var chatRooms = make(map[int]*chatRoom)
 var chatRoomsMu sync.Mutex
 
-// function creating a chatroom (returned by reference)
-func getChatRoom(name string) *chatRoom {
+// returns the chatroom for roomID, creating it if needed
+func getChatRoom(roomID int) *chatRoom {
 	chatRoomsMu.Lock()
 	defer chatRoomsMu.Unlock()
-	if r, ok := chatRooms[name]; ok {
-		return r
+	if room, ok := chatRooms[roomID]; ok {
+		return room
 	}
+	room := &chatRoom{conns: make(map[*wsClient]struct{})}
+	chatRooms[roomID] = room
+	return room
+}
 
-	// chatroom initialized with an empty map of websocket.Conn
-	r := &chatRoom{conns: make(map[*websocket.Conn]struct{})}
-	chatRooms[name] = r
-	return r
+// incoming frames from the client
+type msgFrame struct {
+	Type    string `json:"type"`
+	Room    int    `json:"room"`
+	Content string `json:"content"`
+}
+
+// outgoing error frame
+type errorFrame struct {
+	Type    string `json:"type"`
+	Room    int    `json:"room"`
+	Message string `json:"message"`
 }
 
 func WS(s Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		roomID, err := strconv.Atoi(c.Query("room"))
-
-		if err != nil {
-			c.JSON(400, gin.H{"error": "roomID required"})
-			return
-		}
-
-		// check if the room exists before connecting to it
-		exists, err := s.RoomExists(roomID)
-		if err != nil {
-			c.JSON(500, gin.H{"error": "failed to check room"})
-			return
-		}
-		if !exists {
-			c.JSON(404, gin.H{"error": "room not found"})
-			return
-		}
-
-		// the upgrader is reponsible for switching this HTTP connection to a WebSocket
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			return
 		}
 
-		room := getChatRoom(strconv.Itoa(roomID))
-
-		// NOTE: you need to lock and unlock the room's mutex lock
-		// so that the concurrent websockets don't hit race conditions on the connection list
-		room.mu.Lock()
-		room.conns[conn] = struct{}{}
-		room.mu.Unlock()
-
-		println("connected to room:", roomID)
-
+		client := &wsClient{conn: conn, rooms: make(map[int]struct{})}
 		for {
 			_, msg, err := conn.ReadMessage()
 			if err != nil {
-				// if there is an error delete the connection i.e. disconnect
-				room.mu.Lock()
-				delete(room.conns, conn)
-				room.mu.Unlock()
-				println("disconnected from room:", roomID)
+				// remove the client from every room it subscribed to
+				client.mu.Lock()
+				rooms := make([]int, 0, len(client.rooms))
+				for roomID := range client.rooms {
+					rooms = append(rooms, roomID)
+				}
+				client.mu.Unlock()
+				for _, roomID := range rooms {
+					room := getChatRoom(roomID)
+					room.mu.Lock()
+					delete(room.conns, client)
+					room.mu.Unlock()
+				}
+				println("disconnected")
 				break
 			}
 
-			// save message to db first in a blocking way
-			saved, errm := s.CreateMessage(roomID, "John Doe", string(msg))
-			if errm != nil {
-				println("Failed to send message, reason: ", errm)
+			var frame msgFrame
+			if err := json.Unmarshal(msg, &frame); err != nil {
+				println("invalid frame")
 				continue
 			}
 
-			println("received:", string(msg))
-
-			// broadcast the saved message as JSON to everyone (else) in the same room
-			data, _ := json.Marshal(saved)
-			room.mu.Lock()
-			for other := range room.conns {
-				if other != conn {
-					other.WriteMessage(websocket.TextMessage, data)
+			switch frame.Type {
+			case "subscribe":
+				// only allow subscribing to existing rooms
+				exists, err := s.RoomExists(frame.Room)
+				if err != nil {
+					println("failed to check room:", err)
+					continue
 				}
+				if !exists {
+					data, _ := json.Marshal(errorFrame{Type: "error", Room: frame.Room, Message: "room not found"})
+					conn.WriteMessage(websocket.TextMessage, data)
+					continue
+				}
+				room := getChatRoom(frame.Room)
+				client.mu.Lock()
+				client.rooms[frame.Room] = struct{}{}
+				client.mu.Unlock()
+				room.mu.Lock()
+				room.conns[client] = struct{}{}
+				room.mu.Unlock()
+				println("subscribed to room:", frame.Room)
+
+			case "unsubscribe":
+				client.mu.Lock()
+				delete(client.rooms, frame.Room)
+				client.mu.Unlock()
+				room := getChatRoom(frame.Room)
+				room.mu.Lock()
+				delete(room.conns, client)
+				room.mu.Unlock()
+				println("unsubscribed from room:", frame.Room)
+
+			case "send":
+				// must be subscribed to the room to send in it
+				client.mu.Lock()
+				_, ok := client.rooms[frame.Room]
+				client.mu.Unlock()
+				if !ok {
+					data, _ := json.Marshal(errorFrame{Type: "error", Room: frame.Room, Message: "not subscribed to room"})
+					conn.WriteMessage(websocket.TextMessage, data)
+					continue
+				}
+				saved, errm := s.CreateMessage(frame.Room, "John Doe", frame.Content)
+				if errm != nil {
+					println("failed to save message:", errm)
+					continue
+				}
+				data, _ := json.Marshal(saved)
+				room := getChatRoom(frame.Room)
+				room.mu.Lock()
+				for other := range room.conns {
+					if other != client {
+						other.conn.WriteMessage(websocket.TextMessage, data)
+					}
+				}
+				room.mu.Unlock()
+
+			default:
+				println("unknown frame type:", frame.Type)
 			}
-			room.mu.Unlock()
 		}
 	}
 }
