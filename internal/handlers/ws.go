@@ -3,13 +3,17 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
+
+	"splitnow/internal/types"
 )
 
 var upgrader = websocket.Upgrader{
@@ -27,6 +31,7 @@ type chatRoom struct {
 
 // client is one websocket connection and the rooms it is subscribed to
 type wsClient struct {
+	id    string
 	mu    sync.Mutex
 	conn  *websocket.Conn
 	rooms map[int]struct{}
@@ -40,6 +45,9 @@ type wsDeps struct {
 // global map of all chatrooms and its mutex lock
 var chatRooms = make(map[int]*chatRoom)
 var chatRoomsMu sync.Mutex
+
+// unique id source for websocket clients, so consumers can skip the echo
+var connCounter atomic.Uint64
 
 // returns the chatroom for roomID, creating it if needed
 func getChatRoom(roomID int) *chatRoom {
@@ -67,6 +75,13 @@ type errorFrame struct {
 	Message string `json:"message"`
 }
 
+// pubPayload is what gets published to a room's redis channel:
+// the saved message plus the sender id so consumers can skip the echo
+type pubPayload struct {
+	SenderID string        `json:"sender_id"`
+	Message  types.Message `json:"message"`
+}
+
 func (room *chatRoom) join(client *wsClient, rdb *redis.Client) {
 	room.mu.Lock()
 	defer room.mu.Unlock()
@@ -78,7 +93,7 @@ func (room *chatRoom) join(client *wsClient, rdb *redis.Client) {
 }
 
 // leave removes a local client from the room
-// When it was the last member, the redis subscription is closed 
+// When it was the last member, the redis subscription is closed
 func (room *chatRoom) leave(client *wsClient) {
 	room.mu.Lock()
 	defer room.mu.Unlock()
@@ -86,6 +101,13 @@ func (room *chatRoom) leave(client *wsClient) {
 	if len(room.conns) == 0 && room.pubsub != nil {
 		room.pubsub.Close()
 		room.pubsub = nil
+	}
+}
+
+func (room *chatRoom) sendMessage(sender *wsClient, rdb *redis.Client, msg types.Message) {
+	payload, _ := json.Marshal(pubPayload{SenderID: sender.id, Message: msg})
+	if err := rdb.Publish(context.Background(), "room:"+strconv.Itoa(room.id), payload).Err(); err != nil {
+		println("publish:", err)
 	}
 }
 
@@ -122,6 +144,26 @@ func (ws wsDeps) handleUnsubscribe(client *wsClient, frame msgFrame) {
 	println("unsubscribed from room:", frame.Room)
 }
 
+func (ws wsDeps) handleSendMessage(client *wsClient, frame msgFrame) {
+	// must be subscribed to the room to send in it
+	client.mu.Lock()
+	_, ok := client.rooms[frame.Room]
+	client.mu.Unlock()
+	if !ok {
+		data, _ := json.Marshal(
+			errorFrame{Type: "error", Room: frame.Room, Message: "not subscribed to room"})
+		client.conn.WriteMessage(websocket.TextMessage, data)
+		return
+	}
+	saved, err := ws.store.CreateMessage(frame.Room, "John Doe", frame.Content)
+	if err != nil {
+		println("failed to save message:", err)
+		return
+	}
+	room := getChatRoom(frame.Room)
+	room.sendMessage(client, ws.redisClient, saved)
+}
+
 // consume runs in its own goroutine per room: every message published to the
 // room's redis channel is forwarded to all locally connected clients.
 // stops when the subscription is closed
@@ -129,9 +171,17 @@ func (room *chatRoom) consume() {
 	sub := room.pubsub
 	ch := sub.Channel()
 	for msg := range ch {
+		var p pubPayload
+		if err := json.Unmarshal([]byte(msg.Payload), &p); err != nil {
+			println("bad payload:", err)
+			continue
+		}
+		body, _ := json.Marshal(p.Message)
 		room.mu.Lock()
 		for other := range room.conns {
-			other.conn.WriteMessage(websocket.TextMessage, []byte(msg.Payload))
+			if other.id != p.SenderID {
+				other.conn.WriteMessage(websocket.TextMessage, body)
+			}
 		}
 		room.mu.Unlock()
 	}
@@ -145,7 +195,11 @@ func WS(s Store, redisClient *redis.Client) gin.HandlerFunc {
 			return
 		}
 
-		client := &wsClient{conn: conn, rooms: make(map[int]struct{})}
+		client := &wsClient{
+			id:    fmt.Sprintf("conn-%d", connCounter.Add(1)),
+			conn:  conn,
+			rooms: make(map[int]struct{}),
+		}
 		deps := wsDeps{store: s, redisClient: redisClient}
 		for {
 			_, msg, err := conn.ReadMessage()
@@ -176,30 +230,7 @@ func WS(s Store, redisClient *redis.Client) gin.HandlerFunc {
 			case "unsubscribe":
 				deps.handleUnsubscribe(client, frame)
 			case "send":
-				// must be subscribed to the room to send in it
-				client.mu.Lock()
-				_, ok := client.rooms[frame.Room]
-				client.mu.Unlock()
-				if !ok {
-					data, _ := json.Marshal(errorFrame{Type: "error", Room: frame.Room, Message: "not subscribed to room"})
-					conn.WriteMessage(websocket.TextMessage, data)
-					continue
-				}
-				saved, errm := s.CreateMessage(frame.Room, "John Doe", frame.Content)
-				if errm != nil {
-					println("failed to save message:", errm)
-					continue
-				}
-				data, _ := json.Marshal(saved)
-				room := getChatRoom(frame.Room)
-				room.mu.Lock()
-				for other := range room.conns {
-					if other != client {
-						other.conn.WriteMessage(websocket.TextMessage, data)
-					}
-				}
-				room.mu.Unlock()
-
+				deps.handleSendMessage(client, frame)
 			default:
 				println("unknown frame type:", frame.Type)
 			}
