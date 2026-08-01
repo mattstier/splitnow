@@ -2,14 +2,31 @@
 
 Bill-splitting chatroom app.
 
-# Dependencies
+# Architecture
+
+To support (horizontal) scalability, modifiability, as well as fault-tolerance, a microservices architecture was chosen (this is not yet implemented). The backend is written in Go, using the Gin web framework and combines RESTful endpoints with WebSockets to deliver live messages, and load old ones on-the-go. Redis is used as a message broker to decouple message senders and receivers by enabling subscribing and publishing to 'rooms' - directly mapping to in-app chatrooms - and to enable one WebSocket connection to handle multiple message sources (chats). To handle message persistence PostgreSQL was chosen due to the relational nature of messages and the comprehensive Postgres ecosystem. Messages are saved by the backend every time before broadcasting them, serving as the ground-truth for messages, and ensuring that they are not accidentally lost if broadcasting fails.
+
+## Project layout
+
+```
+.
+├── db                   Postgres connection + queries
+├── frontend             React + Vite app
+├── internal/handlers    REST + WebSocket handlers
+├── main.go              entrypoint, routes, config
+└── sql                  schema migrations
+```
+
+# Development
+
+## Dependencies
 
 - Go 1.25+
 - Node.js + npm
 - PostgreSQL
 - Redis (via Docker)
 
-# Setup
+## Setup
 
 ```bash
 # Database
@@ -30,11 +47,11 @@ npm run dev
 
 Backend runs on `:8080`, frontend on `:5173`, Redis on `:6379`.
 
-# Vite proxy
+## Vite proxy
 
 `vite.config.js` proxies `/ws` to the Go backend. The React code connects to `localhost:5173/ws` — Vite forwards the WebSocket to `localhost:8080/ws`. No CORS config needed.
 
-# Testing WebSocket directly
+## Testing WebSocket directly
 
 A single connection can subscribe to and leave multiple rooms via JSON frames:
 
@@ -45,7 +62,7 @@ npx wscat -c ws://localhost:8080/ws
 > {"type":"unsubscribe","room":1}
 ```
 
-# Kill port
+## Kill port
 
 ```bash
 fuser -k 8080/tcp
