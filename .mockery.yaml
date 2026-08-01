@@ -1,0 +1,4 @@
+with-expecter: true
+issue-845-fix: true
+dir: internal/handlers/mocks
+outpkg: mocks
