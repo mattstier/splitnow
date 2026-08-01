@@ -70,11 +70,23 @@ type errorFrame struct {
 func (room *chatRoom) join(client *wsClient, rdb *redis.Client) {
 	room.mu.Lock()
 	defer room.mu.Unlock()
-	if room.pubsub == nil {          // redis: first member opens subscription
+	if room.pubsub == nil { // redis: first member opens subscription
 		room.pubsub = rdb.Subscribe(context.Background(), "room:"+strconv.Itoa(room.id))
 		go room.consume()
 	}
-	room.conns[client] = struct{}{}  // local: register delivery target
+	room.conns[client] = struct{}{} // local: register delivery target
+}
+
+// leave removes a local client from the room
+// When it was the last member, the redis subscription is closed 
+func (room *chatRoom) leave(client *wsClient) {
+	room.mu.Lock()
+	defer room.mu.Unlock()
+	delete(room.conns, client)
+	if len(room.conns) == 0 && room.pubsub != nil {
+		room.pubsub.Close()
+		room.pubsub = nil
+	}
 }
 
 func (ws wsDeps) handleSubscribe(client *wsClient, frame msgFrame) {
@@ -101,11 +113,21 @@ func (ws wsDeps) handleSubscribe(client *wsClient, frame msgFrame) {
 	println("subscribed to room:", frame.Room)
 }
 
+func (ws wsDeps) handleUnsubscribe(client *wsClient, frame msgFrame) {
+	client.mu.Lock()
+	delete(client.rooms, frame.Room)
+	client.mu.Unlock()
+	room := getChatRoom(frame.Room)
+	room.leave(client)
+	println("unsubscribed from room:", frame.Room)
+}
+
 // consume runs in its own goroutine per room: every message published to the
 // room's redis channel is forwarded to all locally connected clients.
 // stops when the subscription is closed
 func (room *chatRoom) consume() {
-	ch := room.pubsub.Channel()
+	sub := room.pubsub
+	ch := sub.Channel()
 	for msg := range ch {
 		room.mu.Lock()
 		for other := range room.conns {
@@ -113,7 +135,7 @@ func (room *chatRoom) consume() {
 		}
 		room.mu.Unlock()
 	}
-	room.pubsub.Close()
+	sub.Close()
 }
 
 func WS(s Store, redisClient *redis.Client) gin.HandlerFunc {
@@ -136,10 +158,7 @@ func WS(s Store, redisClient *redis.Client) gin.HandlerFunc {
 				}
 				client.mu.Unlock()
 				for _, roomID := range rooms {
-					room := getChatRoom(roomID)
-					room.mu.Lock()
-					delete(room.conns, client)
-					room.mu.Unlock()
+					getChatRoom(roomID).leave(client)
 				}
 				println("disconnected")
 				break
@@ -155,15 +174,7 @@ func WS(s Store, redisClient *redis.Client) gin.HandlerFunc {
 			case "subscribe":
 				deps.handleSubscribe(client, frame)
 			case "unsubscribe":
-				client.mu.Lock()
-				delete(client.rooms, frame.Room)
-				client.mu.Unlock()
-				room := getChatRoom(frame.Room)
-				room.mu.Lock()
-				delete(room.conns, client)
-				room.mu.Unlock()
-				println("unsubscribed from room:", frame.Room)
-
+				deps.handleUnsubscribe(client, frame)
 			case "send":
 				// must be subscribed to the room to send in it
 				client.mu.Lock()
