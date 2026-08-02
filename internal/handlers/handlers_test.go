@@ -67,7 +67,7 @@ func TestCreateRoomEmptyName(t *testing.T) {
 	router := gin.Default()
 	router.POST("/rooms", CreateRoom(store))
 
-	body := bytes.NewBufferString(`{"name": ""}`)
+	body := bytes.NewBufferString(`{"created_by": 1, "name": ""}`)
 	req := httptest.NewRequest(http.MethodPost, "/rooms", body)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -103,4 +103,24 @@ func TestCreateRoomNotJSON(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// testing room creation REST endpoint with missing creator field (negative case)
+func TestCreateRoomMissingCreatorField(t *testing.T) {
+	store := mocks.NewStore(t)
+
+	router := gin.Default()
+	router.POST("/rooms", CreateRoom(store))
+
+	body := bytes.NewBufferString(`{"name": "foo"}`)
+	req := httptest.NewRequest(http.MethodPost, "/rooms", body)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// TODO: revisit when creator existence is validated (auth service)
+func TestCreateRoomNonexistentCreator(t *testing.T) {
+	t.Skip("creator existence not validated yet, no users table until auth service")
 }
