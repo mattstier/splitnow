@@ -22,6 +22,8 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+//===== Tests for POST "/rooms" =====//
+
 // testing room creation REST endpoint (positive case)
 func TestCreateRoom(t *testing.T) {
 	store := mocks.NewStore(t)
@@ -128,20 +130,81 @@ func TestCreateRoomNonexistentCreator(t *testing.T) {
 
 // testing room creation REST endpoint when the store/database fails (negative case)
 func TestCreateRoomStoreError(t *testing.T) {
-    store := mocks.NewStore(t)
-	// introduce error in db 
-    store.EXPECT().
-        CreateRoom("gym", 1).
-        Return(types.Room{}, errors.New("database unavailable")) 
+	store := mocks.NewStore(t)
+	// introduce error in db
+	store.EXPECT().
+		CreateRoom("gym", 1).
+		Return(types.Room{}, errors.New("database unavailable"))
 
-    router := gin.Default()
-    router.POST("/rooms", CreateRoom(store))
+	router := gin.Default()
+	router.POST("/rooms", CreateRoom(store))
 
-    body := bytes.NewBufferString(`{"name":"gym","created_by":1}`)
-    req := httptest.NewRequest(http.MethodPost, "/rooms", body)
-    w := httptest.NewRecorder()
-    router.ServeHTTP(w, req)
+	body := bytes.NewBufferString(`{"name":"gym","created_by":1}`)
+	req := httptest.NewRequest(http.MethodPost, "/rooms", body)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
 
 	// assert that it gives correct 500
-    assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// ===== Tests for GET "/rooms" =====//
+
+// test for getting all rooms (positive case)
+func TestGetRooms(t *testing.T) {
+	store := mocks.NewStore(t)
+	// add 'room1' and 'room2' to mock,
+	store.EXPECT().
+		GetAllRooms().
+		Return([]types.Room{
+			{ID: 1, Name: "room1", CreatedBy: 1},
+			{ID: 2, Name: "room2", CreatedBy: 1}}, nil)
+
+	router := gin.Default()
+	router.GET("/rooms", GetRooms(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/rooms", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var rooms []types.Room
+	err := json.Unmarshal(w.Body.Bytes(), &rooms)
+	assert.NoError(t, err)
+	// see if 2 results 
+	assert.Len(t, rooms, 2)
+
+	// see if the 2 results are correct regardless of order
+	assert.Contains(t, rooms, types.Room{ID: 1, Name: "room1", CreatedBy: 1})
+	assert.Contains(t, rooms, types.Room{ID: 2, Name: "room2", CreatedBy: 1})
+}
+
+// test for getting all rooms with a given name (positive case)
+func TestGetRoomsWithName(t *testing.T) {
+	store := mocks.NewStore(t)
+	// add 'room1' and 'room2' to mock,
+	store.EXPECT().
+		GetRoomsWithName("room1").
+		Return([]types.Room{
+			{ID: 1, Name: "room1", CreatedBy: 1}}, nil)
+
+	router := gin.Default()
+	router.GET("/rooms", GetRooms(store))
+
+	// query room1 specifically
+	req := httptest.NewRequest(http.MethodGet, "/rooms?name=room1", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var rooms []types.Room
+	err := json.Unmarshal(w.Body.Bytes(), &rooms)
+	assert.NoError(t, err)
+	// see if 1 results 
+	assert.Len(t, rooms, 1)
+
+	// see if the correct room is returned 
+	assert.Equal(t, rooms[0], types.Room{ID: 1, Name: "room1", CreatedBy: 1})
 }
