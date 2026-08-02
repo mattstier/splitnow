@@ -172,7 +172,7 @@ func TestGetRooms(t *testing.T) {
 	var rooms []types.Room
 	err := json.Unmarshal(w.Body.Bytes(), &rooms)
 	assert.NoError(t, err)
-	// see if 2 results 
+	// see if 2 results
 	assert.Len(t, rooms, 2)
 
 	// see if the 2 results are correct regardless of order
@@ -183,10 +183,11 @@ func TestGetRooms(t *testing.T) {
 // test for getting all rooms with a given name (positive case)
 func TestGetRoomsWithName(t *testing.T) {
 	store := mocks.NewStore(t)
-	// add 'room1' and 'room2' to mock,
+	// add 'room1' and 'room1' with a different ID to mock,
 	store.EXPECT().
 		GetRoomsWithName("room1").
 		Return([]types.Room{
+			{ID: 2, Name: "room1", CreatedBy: 2}, 
 			{ID: 1, Name: "room1", CreatedBy: 1}}, nil)
 
 	router := gin.Default()
@@ -202,9 +203,54 @@ func TestGetRoomsWithName(t *testing.T) {
 	var rooms []types.Room
 	err := json.Unmarshal(w.Body.Bytes(), &rooms)
 	assert.NoError(t, err)
-	// see if 1 results 
-	assert.Len(t, rooms, 1)
+	// see if both rooms show up 
+	assert.Len(t, rooms, 2)
 
-	// see if the correct room is returned 
-	assert.Equal(t, rooms[0], types.Room{ID: 1, Name: "room1", CreatedBy: 1})
+	// see if the correct room is returned
+	assert.Contains(t, rooms, types.Room{ID: 1, Name: "room1", CreatedBy: 1})
+	assert.Contains(t, rooms, types.Room{ID: 2, Name: "room1", CreatedBy: 2})
+}
+
+// test for querying a room with a given name that does not exist in store 
+func TestGetRoomNoResult(t *testing.T) {
+	store := mocks.NewStore(t)
+	// mock no match for a given room 'nonexistent'
+	store.EXPECT().GetRoomsWithName("nonexistent").Return([]types.Room{}, nil)
+	router := gin.Default()
+	router.GET("/rooms", GetRooms(store))
+
+	// query nonexistent room
+	req := httptest.NewRequest(http.MethodGet, "/rooms?name=nonexistent", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// by design it should not give 404, just 200 and an empty list
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var rooms []types.Room
+	err := json.Unmarshal(w.Body.Bytes(), &rooms)
+	assert.NoError(t, err)
+
+	// see if the list is indeed empty
+	assert.Len(t, rooms, 0)
+	assert.Equal(t, rooms, []types.Room{})
+}
+
+// testing room querying REST endpoint when the store/database fails (negative case)
+func TestGetRoomStoreError(t *testing.T) {
+	store := mocks.NewStore(t)
+	// introduce error in db
+	store.EXPECT().
+		GetAllRooms().
+		Return([]types.Room{}, errors.New("database unavailable"))
+
+	router := gin.Default()
+	router.GET("/rooms", GetRooms(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/rooms", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// assert that it gives correct 500
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
