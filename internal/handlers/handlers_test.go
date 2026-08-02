@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -123,4 +124,24 @@ func TestCreateRoomMissingCreatorField(t *testing.T) {
 // TODO: revisit when creator existence is validated (auth service)
 func TestCreateRoomNonexistentCreator(t *testing.T) {
 	t.Skip("creator existence not validated yet, no users table until auth service")
+}
+
+// testing room creation REST endpoint when the store/database fails (negative case)
+func TestCreateRoomStoreError(t *testing.T) {
+    store := mocks.NewStore(t)
+	// introduce error in db 
+    store.EXPECT().
+        CreateRoom("gym", 1).
+        Return(types.Room{}, errors.New("database unavailable")) 
+
+    router := gin.Default()
+    router.POST("/rooms", CreateRoom(store))
+
+    body := bytes.NewBufferString(`{"name":"gym","created_by":1}`)
+    req := httptest.NewRequest(http.MethodPost, "/rooms", body)
+    w := httptest.NewRecorder()
+    router.ServeHTTP(w, req)
+
+	// assert that it gives correct 500
+    assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
