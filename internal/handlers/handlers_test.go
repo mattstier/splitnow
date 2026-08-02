@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -14,9 +15,14 @@ import (
 	"splitnow/internal/types"
 )
 
-func TestCreateRoom(t *testing.T) {
+// test setup
+func TestMain(m *testing.M) {
 	gin.SetMode(gin.TestMode)
+	os.Exit(m.Run())
+}
 
+// testing room creation REST endpoint (positive case)
+func TestCreateRoom(t *testing.T) {
 	store := mocks.NewStore(t)
 	store.EXPECT().
 		CreateRoom("gym", 1).
@@ -39,15 +45,59 @@ func TestCreateRoom(t *testing.T) {
 	assert.Equal(t, 1, room.CreatedBy)
 }
 
-func TestCreateRoomBadBody(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
+// testing room creation REST endpoint with missing name field (negative case)
+func TestCreateRoomMissingNameField(t *testing.T) {
 	store := mocks.NewStore(t)
 
 	router := gin.Default()
 	router.POST("/rooms", CreateRoom(store))
 
-	body := bytes.NewBufferString(`{"name":""}`)
+	body := bytes.NewBufferString(`{"created_by": 1}`)
+	req := httptest.NewRequest(http.MethodPost, "/rooms", body)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// testing room creation REST endpoint with empty name field (negative case)
+func TestCreateRoomEmptyName(t *testing.T) {
+	store := mocks.NewStore(t)
+
+	router := gin.Default()
+	router.POST("/rooms", CreateRoom(store))
+
+	body := bytes.NewBufferString(`{"name": ""}`)
+	req := httptest.NewRequest(http.MethodPost, "/rooms", body)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// testing room creation REST endpoint with an empty JSON (negative case)
+func TestCreateRoomEmptyJSON(t *testing.T) {
+	store := mocks.NewStore(t)
+
+	router := gin.Default()
+	router.POST("/rooms", CreateRoom(store))
+
+	body := bytes.NewBufferString(`{}`)
+	req := httptest.NewRequest(http.MethodPost, "/rooms", body)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// testing room creation REST endpoint with an invalid JSON format (negative case)
+func TestCreateRoomNotJSON(t *testing.T) {
+	store := mocks.NewStore(t)
+
+	router := gin.Default()
+	router.POST("/rooms", CreateRoom(store))
+
+	body := bytes.NewBufferString(`"name": "foo"`)
 	req := httptest.NewRequest(http.MethodPost, "/rooms", body)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)

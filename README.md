@@ -53,14 +53,21 @@ Backend runs on `:8080`, frontend on `:5173`, Redis on `:6379`.
 
 ## Testing API 
 ```bash
-# install the mock generator (once)
+# install the test tooling (once)
 go install github.com/vektra/mockery/v2@latest
+go install gotest.tools/gotestsum@latest
 
 # generate mocks from the Store interface
 cd internal/handlers && mockery --name Store --dir ./
 
-# run tests (-v for verbose)
-go test ./internal/handlers/ -v
+# run tests, colorized with gotestsum
+cd internal/handlers && gotestsum --format testname
+
+# or simply 
+go test ./internal/handlers -v 
+
+# or 
+go test ./...
 ```
 
 ## Testing WebSocket directly
