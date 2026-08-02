@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -187,7 +188,7 @@ func TestGetRoomsWithName(t *testing.T) {
 	store.EXPECT().
 		GetRoomsWithName("room1").
 		Return([]types.Room{
-			{ID: 2, Name: "room1", CreatedBy: 2}, 
+			{ID: 2, Name: "room1", CreatedBy: 2},
 			{ID: 1, Name: "room1", CreatedBy: 1}}, nil)
 
 	router := gin.Default()
@@ -203,7 +204,7 @@ func TestGetRoomsWithName(t *testing.T) {
 	var rooms []types.Room
 	err := json.Unmarshal(w.Body.Bytes(), &rooms)
 	assert.NoError(t, err)
-	// see if both rooms show up 
+	// see if both rooms show up
 	assert.Len(t, rooms, 2)
 
 	// see if the correct room is returned
@@ -211,7 +212,7 @@ func TestGetRoomsWithName(t *testing.T) {
 	assert.Contains(t, rooms, types.Room{ID: 2, Name: "room1", CreatedBy: 2})
 }
 
-// test for querying a room with a given name that does not exist in store 
+// test for querying a room with a given name that does not exist in store
 func TestGetRoomNoResult(t *testing.T) {
 	store := mocks.NewStore(t)
 	// mock no match for a given room 'nonexistent'
@@ -248,6 +249,107 @@ func TestGetRoomStoreError(t *testing.T) {
 	router.GET("/rooms", GetRooms(store))
 
 	req := httptest.NewRequest(http.MethodGet, "/rooms", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// assert that it gives correct 500
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// ===== Tests for GET "/messages" =====//
+
+// test getting all the messages of an existing room
+func TestGetMessagesByRoom(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		GetMessagesByRoom(1).
+		Return([]types.Message{
+			{
+				ID:        1,
+				RoomID:    1,
+				Sender:    "1",
+				Content:   "foo",
+				CreatedAt: time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC),
+			},
+			{
+				ID:        2,
+				RoomID:    1,
+				Sender:    "2",
+				Content:   "bar",
+				CreatedAt: time.Date(2026, 6, 1, 13, 0, 0, 0, time.UTC),
+			},
+		}, nil)
+
+	router := gin.Default()
+	router.GET("/messages", GetMessages(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/messages?room=1", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var messages []types.Message
+	err := json.Unmarshal(w.Body.Bytes(), &messages)
+	assert.NoError(t, err)
+
+	assert.Contains(t, messages, types.Message{
+		ID:        1,
+		RoomID:    1,
+		Sender:    "1",
+		Content:   "foo",
+		CreatedAt: time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC),
+	})
+
+	assert.Contains(t, messages, types.Message{
+		ID:        2,
+		RoomID:    1,
+		Sender:    "2",
+		Content:   "bar",
+		CreatedAt: time.Date(2026, 6, 1, 13, 0, 0, 0, time.UTC),
+	})
+}
+
+// test getting all the messages of a room that does not exist
+func TestGetMessagesByRoomNonexistentRoom(t *testing.T) {
+	store := mocks.NewStore(t)
+	// mock no match for a nonexistent room
+	store.EXPECT().
+		GetMessagesByRoom(999).
+		Return([]types.Message{}, nil)
+
+	router := gin.Default()
+	router.GET("/messages", GetMessages(store))
+
+	// query a nonexistent room
+	req := httptest.NewRequest(http.MethodGet, "/messages?room=999", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// by design it gives 200 and an empty list (no RoomExists check yet)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var messages []types.Message
+	err := json.Unmarshal(w.Body.Bytes(), &messages)
+	assert.NoError(t, err)
+
+	// see if the list is indeed empty
+	assert.Len(t, messages, 0)
+	assert.Equal(t, messages, []types.Message{})
+}
+
+// test getting all the messages of a room with a failed Store
+func TestGetMessagesByRoomStoreError(t *testing.T) {
+	store := mocks.NewStore(t)
+	// introduce error in db
+	store.EXPECT().
+		GetMessagesByRoom(1).
+		Return([]types.Message{}, errors.New("database unavailable"))
+
+	router := gin.Default()
+	router.GET("/messages", GetMessages(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/messages?room=1", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
