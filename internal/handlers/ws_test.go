@@ -155,3 +155,23 @@ func TestWSSubscribeNonexistentRoom(t *testing.T) {
 	assert.Equal(t, 999, got.Room)
 	//assert.Equal(t, "room not found", got.Message)
 }
+
+func TestWSUnsubscribe(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().RoomExists(1).Return(true, nil) // needed for the subscribe step
+
+	mr, rdb := newTestRedis(t)
+	conn := setupWS(t, store, rdb)
+
+	// get the room into a subscribed state first
+	conn.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
+	assert.Eventually(t, func() bool {
+		return mr.PubSubNumSub("room:1")["room:1"] == 1
+	}, time.Second, 10*time.Millisecond)
+
+	// unsubscribe: leaving the last member must drop the redis subscription
+	conn.WriteJSON(msgFrame{Type: "unsubscribe", Room: 1})
+	assert.Eventually(t, func() bool {
+		return mr.PubSubNumSub("room:1")["room:1"] == 0
+	}, time.Second, 10*time.Millisecond)
+}
