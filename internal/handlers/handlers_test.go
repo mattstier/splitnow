@@ -356,3 +356,35 @@ func TestGetMessagesByRoomStoreError(t *testing.T) {
 	// assert that it gives correct 500
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
+
+// test getting all the messages of a room without specifying a roomID (negative case)
+func TestGetMessagesByRoomMissingRoomID(t *testing.T) {
+	store := mocks.NewStore(t)
+
+	router := gin.Default()
+	router.GET("/messages", GetMessages(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/messages?room=", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// assert that it gives a 400 Bad Request 
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// testing the name-filtered room query when the store fails (negative case)
+func TestGetRoomsWithNameStoreError(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		GetRoomsWithName("room1").
+		Return([]types.Room{}, errors.New("database unavailable"))
+
+	router := gin.Default()
+	router.GET("/rooms", GetRooms(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/rooms?name=room1", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
