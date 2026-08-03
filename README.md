@@ -51,6 +51,35 @@ Backend runs on `:8080`, frontend on `:5173`, Redis on `:6379`.
 
 `vite.config.js` proxies `/ws` to the Go backend. The React code connects to `localhost:5173/ws` — Vite forwards the WebSocket to `localhost:8080/ws`. No CORS config needed.
 
+## Testing
+
+Handler tests are written with **mockery** (generated mocks of the `Store` interface) and **testify** (assertions), and run with **gotestsum** or the **go test** command.
+
+```bash
+# install the test tooling (once)
+go install github.com/vektra/mockery/v2@latest
+go install gotest.tools/gotestsum@latest
+
+# generate mocks from the Store interface
+cd internal/handlers && mockery --name Store --dir ./
+
+# run tests, colorized with gotestsum
+cd internal/handlers && gotestsum --format testname
+
+# or simply
+go test ./internal/handlers -v
+
+# or everything
+go test ./...
+
+# test coverage 
+go test -cover ./internal/handlers/          # summary
+go test -coverprofile=cover.out ./internal/handlers/
+go tool cover -func=cover.out                # coverage by function
+go tool cover -html=cover.out                # browser, line-by-line
+```
+
+Both tools install into `$GOPATH/bin` make sure it's on `$PATH`.
 ## Testing WebSocket directly
 
 A single connection can subscribe to and leave multiple rooms via JSON frames:
