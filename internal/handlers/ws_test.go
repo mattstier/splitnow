@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -94,7 +95,7 @@ func TestWSSubscribeValidRoom(t *testing.T) {
 }
 
 // test that sending a message publishes it to the room's redis channel
-func TestWSSend(t *testing.T) {
+func TestWSSendMessage(t *testing.T) {
 	store := mocks.NewStore(t)
 	store.EXPECT().
 		RoomExists(1).
@@ -134,6 +135,57 @@ func TestWSSend(t *testing.T) {
 	}
 }
 
+// test that sending without subscribing first returns an error frame
+func TestWSSendMessageNotSubscribed(t *testing.T) {
+	store := mocks.NewStore(t)
+	conn := setupWS(t, store, nil) // path never touches redis
+
+	err := conn.WriteJSON(msgFrame{Type: "send", Room: 1, Content: "hello"})
+	assert.NoError(t, err)
+
+	var got errorFrame
+	err = conn.ReadJSON(&got)
+	assert.NoError(t, err)
+	assert.Equal(t, "error", got.Type)
+	assert.Equal(t, 1, got.Room)
+	//assert.Equal(t, "not subscribed to room", got.Message)
+}
+
+// test that if a sent message could not be saved due to a store error, it does not crash
+// TODO: notify the sender on save failure
+func TestWSSendMessageStoreError(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(true, nil) // needed for the subscribe step
+	store.EXPECT().
+		CreateMessage(1, "John Doe", "hello").
+		Return(types.Message{}, errors.New("db down"))
+
+	_, rdb := newTestRedis(t)
+	conn := setupWS(t, store, rdb)
+
+	// listen on the room's redis channel from the test side
+	sub := rdb.Subscribe(context.Background(), "room:1")
+	t.Cleanup(func() { sub.Close() })
+	ch := sub.Channel()
+
+	// must be subscribed before sending
+	err := conn.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
+	assert.NoError(t, err)
+
+	err = conn.WriteJSON(msgFrame{Type: "send", Room: 1, Content: "hello"})
+	assert.NoError(t, err)
+
+	select {
+	case msg := <-ch:
+		t.Fatalf("unexpected publish after failed save: %s", msg.Payload)
+	case <-time.After(200 * time.Millisecond):
+		// expected: store error is swallowed, nothing published
+		// TODO: notify the sender on save failure
+	}
+}
+
 // test that subscribing to a nonexistent room returns an error frame
 func TestWSSubscribeNonexistentRoom(t *testing.T) {
 	store := mocks.NewStore(t)
@@ -156,6 +208,59 @@ func TestWSSubscribeNonexistentRoom(t *testing.T) {
 	//assert.Equal(t, "room not found", got.Message)
 }
 
+// test that a store error while checking the room is swallowed and no subscription opens
+func TestWSSubscribeStoreError(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().RoomExists(1).Return(false, errors.New("db down"))
+
+	mr, rdb := newTestRedis(t)
+	conn := setupWS(t, store, rdb)
+
+	conn.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
+
+	assert.Eventually(t, func() bool {
+		return mr.PubSubNumSub("room:1")["room:1"] == 0
+	}, time.Second, 10*time.Millisecond)
+}
+
+// test that a frame that is not valid json is ignored and the connection stays alive
+func TestWSInvalidFrame(t *testing.T) {
+	store := mocks.NewStore(t)
+	conn := setupWS(t, store, nil) // path never touches redis
+
+	err := conn.WriteMessage(websocket.TextMessage, []byte("not json"))
+	assert.NoError(t, err)
+
+	// a valid frame after the bad one should still be processed
+	err = conn.WriteJSON(msgFrame{Type: "send", Room: 1, Content: "hello"})
+	assert.NoError(t, err)
+
+	var got errorFrame
+	err = conn.ReadJSON(&got)
+	assert.NoError(t, err)
+	assert.Equal(t, "error", got.Type)
+	assert.Equal(t, 1, got.Room)
+}
+
+// test that an unknown frame type is ignored and the connection stays alive
+func TestWSUnknownFrameType(t *testing.T) {
+	store := mocks.NewStore(t)
+	conn := setupWS(t, store, nil) // path never touches redis
+
+	err := conn.WriteJSON(msgFrame{Type: "bogus", Room: 1})
+	assert.NoError(t, err)
+
+	// a valid frame after the unknown one should still be processed
+	err = conn.WriteJSON(msgFrame{Type: "send", Room: 1, Content: "hello"})
+	assert.NoError(t, err)
+
+	var got errorFrame
+	err = conn.ReadJSON(&got)
+	assert.NoError(t, err)
+	assert.Equal(t, "error", got.Type)
+	assert.Equal(t, 1, got.Room)
+}
+
 func TestWSUnsubscribe(t *testing.T) {
 	store := mocks.NewStore(t)
 	store.EXPECT().RoomExists(1).Return(true, nil) // needed for the subscribe step
@@ -174,4 +279,45 @@ func TestWSUnsubscribe(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return mr.PubSubNumSub("room:1")["room:1"] == 0
 	}, time.Second, 10*time.Millisecond)
+}
+
+// test that a message is delivered to other room members, but not echoed to the sender
+func TestWSDeliveryNoEcho(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().RoomExists(1).Return(true, nil).Times(2)
+	store.EXPECT().
+		CreateMessage(1, "John Doe", "hello").
+		Return(types.Message{
+			ID:        1,
+			RoomID:    1,
+			Sender:    "John Doe",
+			Content:   "hello",
+			CreatedAt: time.Now(),
+		}, nil)
+
+	_, rdb := newTestRedis(t)
+	sender := setupWS(t, store, rdb)
+	receiver := setupWS(t, store, rdb)
+
+	// both clients must subscribe before the message is sent
+	err := sender.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
+	assert.NoError(t, err)
+	err = receiver.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
+	assert.NoError(t, err)
+
+	err = sender.WriteJSON(msgFrame{Type: "send", Room: 1, Content: "hello"})
+	assert.NoError(t, err)
+
+	// the other member receives the message
+	var got types.Message
+	receiver.SetReadDeadline(time.Now().Add(time.Second))
+	err = receiver.ReadJSON(&got)
+	assert.NoError(t, err)
+	assert.Equal(t, "hello", got.Content)
+
+	// the sender does not get an echo of its own message
+	sender.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	var echo types.Message
+	err = sender.ReadJSON(&echo)
+	assert.Error(t, err, "sender should not receive its own message")
 }
