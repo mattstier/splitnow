@@ -180,7 +180,7 @@ func TestWSSendMessageStoreError(t *testing.T) {
 	select {
 	case msg := <-ch:
 		t.Fatalf("unexpected publish after failed save: %s", msg.Payload)
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(500 * time.Millisecond):
 		// expected: store error is swallowed, nothing published
 		// TODO: notify the sender on save failure
 	}
@@ -211,16 +211,26 @@ func TestWSSubscribeNonexistentRoom(t *testing.T) {
 // test that a store error while checking the room is swallowed and no subscription opens
 func TestWSSubscribeStoreError(t *testing.T) {
 	store := mocks.NewStore(t)
-	store.EXPECT().RoomExists(1).Return(false, errors.New("db down"))
+	roomChecked := make(chan struct{}, 1)
+	store.EXPECT().
+		RoomExists(1).
+		Run(func(int) { roomChecked <- struct{}{} }).
+		Return(false, errors.New("db down"))
 
 	mr, rdb := newTestRedis(t)
 	conn := setupWS(t, store, rdb)
 
 	conn.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
 
-	assert.Eventually(t, func() bool {
-		return mr.PubSubNumSub("room:1")["room:1"] == 0
-	}, time.Second, 10*time.Millisecond)
+	select {
+	case <-roomChecked:
+		// handler called RoomExists, hit the error, and returned without subscribing
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for RoomExists call")
+	}
+
+	// store error was swallowed: no subscription opened (deterministic postcondition)
+	assert.Equal(t, 0, mr.PubSubNumSub("room:1")["room:1"])
 }
 
 // test that a frame that is not valid json is ignored and the connection stays alive
