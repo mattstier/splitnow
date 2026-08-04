@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"splitnow/auth-service/db"
+	"splitnow/auth-service/internal/handlers"
 )
 
 func Health(ctx *gin.Context) {
@@ -17,7 +18,10 @@ func main() {
 		println("Failed to connect to db, reason: ", err)
 	}
 
+	store := db.Store{} 
+
 	router := gin.Default()
 	router.GET("/health", Health)
+	router.POST("/users", handlers.CreateUser(store))
 	router.Run(":8081")
 }
