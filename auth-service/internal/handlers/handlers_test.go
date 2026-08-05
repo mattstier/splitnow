@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -96,4 +97,23 @@ func TestCreateUserUsernameTaken(t *testing.T) {
 
 	assert.Equal(t, http.StatusConflict, w.Code)
 	assert.Contains(t, w.Body.String(), "username already taken")
+}
+
+func TestCreateUserStoreError(t *testing.T) {
+	store := mocks.NewStore(t)
+	// introduce error in db
+	store.EXPECT().
+		CreateUser("example@gmail.com", "Foo", mock.Anything).
+		Return(types.User{}, errors.New("database unavailable"))
+
+	router := gin.Default()
+	router.POST("/users", CreateUser(store))
+
+	body := bytes.NewBufferString(`{"email":"example@gmail.com","username":"Foo","password":"1234"}`)
+	req := httptest.NewRequest(http.MethodPost, "/users", body)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// assert that it gives correct 500
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
