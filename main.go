@@ -10,7 +10,7 @@ import (
 
 func main() {
 	// connnecting to the splitnow db with root user (for now)
-	err := db.Connect("postgres://matestier@/splitnow?host=/var/run/postgresql")
+	err := db.Connect("postgres:///splitnow?host=/var/run/postgresql")
 	if err != nil {
 		println("Failed to connect to db, reason: ", err)
 	}
