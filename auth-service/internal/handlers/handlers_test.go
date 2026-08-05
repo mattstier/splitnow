@@ -77,7 +77,11 @@ func TestCreateUserEmailTaken(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusConflict, w.Code)
-	assert.Contains(t, w.Body.String(), "email already taken")
+
+	// assert that that response specified which field is already taken
+	var respBody map[string]string
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	assert.Equal(t, "email", respBody["field"])
 }
 
 // username is already taken
@@ -96,7 +100,11 @@ func TestCreateUserUsernameTaken(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusConflict, w.Code)
-	assert.Contains(t, w.Body.String(), "username already taken")
+
+	// assert that that response specified which field is already taken
+	var respBody map[string]string
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	assert.Equal(t, "username", respBody["field"])
 }
 
 func TestCreateUserStoreError(t *testing.T) {
