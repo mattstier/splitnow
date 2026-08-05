@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -123,5 +124,51 @@ func TestCreateUserStoreError(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	// assert that it gives correct 500
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestCreateUserInvalidBody(t *testing.T) {
+	store := mocks.NewStore(t)
+
+	router := gin.Default()
+	router.POST("/users", CreateUser(store))
+
+	cases := []struct {
+		name string
+		body string
+	}{
+		{"missing email", `{"username":"Foo","password":"1234"}`},
+		{"missing username", `{"email":"example@gmail.com","password":"1234"}`},
+		{"missing password", `{"email":"example@gmail.com","username":"Foo"}`},
+		{"wrong type", `{"email":123,"username":"Foo","password":"1234"}`},
+		{"malformed json", `{"email":`},
+		{"empty body", ``},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/users", bytes.NewBufferString(tc.body))
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.JSONEq(t, `{"error":"invalid body"}`, w.Body.String())
+		})
+	}
+}
+
+func TestCreateUserHashError(t *testing.T) {
+	store := mocks.NewStore(t)
+
+	router := gin.Default()
+	router.POST("/users", CreateUser(store))
+
+	// NOTE: bcrypt fails on passwords longer than 72 bytes
+	longPass := strings.Repeat("a", 73)
+	body := bytes.NewBufferString(`{"email":"example@gmail.com","username":"Foo","password":"` + longPass + `"}`)
+	req := httptest.NewRequest(http.MethodPost, "/users", body)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
