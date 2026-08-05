@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"splitnow/auth-service/internal/types"
 
@@ -41,8 +42,17 @@ func CreateUser(s Store) gin.HandlerFunc {
 
 		user, err := s.CreateUser(input.Email, input.Username, hashedPassword)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError,
-				gin.H{"error": "failed to register user"})
+			// check error type and return the fitting message and status code
+			switch {
+			case errors.Is(err, types.ErrEmailTaken):
+				c.JSON(http.StatusConflict,
+					gin.H{"error": "email already taken", "field": "email"})
+			case errors.Is(err, types.ErrUsernameTaken):
+				c.JSON(http.StatusConflict,
+					gin.H{"error": "username already taken", "field": "username"})
+			default:
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register user"})
+			}
 			return
 		}
 		c.JSON(http.StatusCreated, user)

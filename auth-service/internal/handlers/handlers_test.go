@@ -59,3 +59,41 @@ func TestCreateUser(t *testing.T) {
 	// check that it does not return the password in any way
 	assert.NotContains(t, w.Body.String(), "password")
 }
+
+// email is already registered
+func TestCreateUserEmailTaken(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		CreateUser("example@gmail.com", "Foo", mock.Anything).
+		Return(types.User{}, types.ErrEmailTaken)
+
+	router := gin.Default()
+	router.POST("/users", CreateUser(store))
+
+	body := bytes.NewBufferString(`{"email":"example@gmail.com","username":"Foo","password":"1234"}`)
+	req := httptest.NewRequest(http.MethodPost, "/users", body)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusConflict, w.Code)
+	assert.Contains(t, w.Body.String(), "email already taken")
+}
+
+// username is already taken
+func TestCreateUserUsernameTaken(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		CreateUser("example@gmail.com", "Foo", mock.Anything).
+		Return(types.User{}, types.ErrUsernameTaken)
+
+	router := gin.Default()
+	router.POST("/users", CreateUser(store))
+
+	body := bytes.NewBufferString(`{"email":"example@gmail.com","username":"Foo","password":"1234"}`)
+	req := httptest.NewRequest(http.MethodPost, "/users", body)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusConflict, w.Code)
+	assert.Contains(t, w.Body.String(), "username already taken")
+}
