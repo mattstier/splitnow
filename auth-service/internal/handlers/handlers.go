@@ -23,8 +23,8 @@ func CreateUser(s Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input struct {
 			Email    string `json:"email" binding:"required"`
-			Username string `json:"username" binding:"required"`
-			Password string `json:"password" binding:"required"`
+			Username string `json:"username" binding:"required,min=3,max=20"`
+			Password string `json:"password" binding:"required,min=8,max=72"`
 		}
 
 		if err := c.ShouldBindJSON(&input); err != nil {

@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"golang.org/x/crypto/bcrypt"
 
 	"splitnow/auth-service/internal/handlers/mocks"
 	"splitnow/auth-service/internal/types"
@@ -42,7 +43,7 @@ func TestCreateUser(t *testing.T) {
 	router := gin.Default()
 	router.POST("/users", CreateUser(store))
 
-	body := bytes.NewBufferString(`{"email":"example@gmail.com","username":"Foo","password":"1234"}`)
+	body := bytes.NewBufferString(`{"email":"example@gmail.com","username":"Foo","password":"12345678"}`)
 	req := httptest.NewRequest(http.MethodPost, "/users", body)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -72,7 +73,7 @@ func TestCreateUserEmailTaken(t *testing.T) {
 	router := gin.Default()
 	router.POST("/users", CreateUser(store))
 
-	body := bytes.NewBufferString(`{"email":"example@gmail.com","username":"Foo","password":"1234"}`)
+	body := bytes.NewBufferString(`{"email":"example@gmail.com","username":"Foo","password":"12345678"}`)
 	req := httptest.NewRequest(http.MethodPost, "/users", body)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -95,7 +96,7 @@ func TestCreateUserUsernameTaken(t *testing.T) {
 	router := gin.Default()
 	router.POST("/users", CreateUser(store))
 
-	body := bytes.NewBufferString(`{"email":"example@gmail.com","username":"Foo","password":"1234"}`)
+	body := bytes.NewBufferString(`{"email":"example@gmail.com","username":"Foo","password":"12345678"}`)
 	req := httptest.NewRequest(http.MethodPost, "/users", body)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -118,7 +119,7 @@ func TestCreateUserStoreError(t *testing.T) {
 	router := gin.Default()
 	router.POST("/users", CreateUser(store))
 
-	body := bytes.NewBufferString(`{"email":"example@gmail.com","username":"Foo","password":"1234"}`)
+	body := bytes.NewBufferString(`{"email":"example@gmail.com","username":"Foo","password":"12345678"}`)
 	req := httptest.NewRequest(http.MethodPost, "/users", body)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -143,6 +144,9 @@ func TestCreateUserInvalidBody(t *testing.T) {
 		{"wrong type", `{"email":123,"username":"Foo","password":"1234"}`},
 		{"malformed json", `{"email":`},
 		{"empty body", ``},
+		{"password too short", `{"email":"example@gmail.com","username":"Foo","password":"1234"}`},
+		{"username too short", `{"email":"example@gmail.com","username":"ab","password":"12345678"}`},
+		{"username too long", `{"email":"example@gmail.com","username":"aaaaaaaaaaaaaaaaaaaaa","password":"12345678"}`},
 	}
 
 	for _, tc := range cases {
@@ -157,18 +161,14 @@ func TestCreateUserInvalidBody(t *testing.T) {
 	}
 }
 
-func TestCreateUserHashError(t *testing.T) {
-	store := mocks.NewStore(t)
+func TestHashPassword(t *testing.T) {
+	hash, err := HashPassword("secret")
+	assert.NoError(t, err)
+	assert.NotEqual(t, "secret", hash)
+	assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(hash), []byte("secret")))
+}
 
-	router := gin.Default()
-	router.POST("/users", CreateUser(store))
-
-	// NOTE: bcrypt fails on passwords longer than 72 bytes
-	longPass := strings.Repeat("a", 73)
-	body := bytes.NewBufferString(`{"email":"example@gmail.com","username":"Foo","password":"` + longPass + `"}`)
-	req := httptest.NewRequest(http.MethodPost, "/users", body)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+func TestHashPasswordTooLong(t *testing.T) {
+	_, err := HashPassword(strings.Repeat("a", 73))
+	assert.ErrorIs(t, err, bcrypt.ErrPasswordTooLong)
 }
