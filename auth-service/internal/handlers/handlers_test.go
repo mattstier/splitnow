@@ -246,11 +246,72 @@ func TestLoginValidCredentials(t *testing.T) {
 }
 
 func TestLoginInvalidPassword(t *testing.T) {
-	t.Skip()
+	store := mocks.NewStore(t)
+	passwordHash, err := HashPassword("12345678")
+	assert.NoError(t, err)
+
+	store.EXPECT().
+		GetUserByEmail("johndoe@gmail.com").
+		Return(types.User{
+			ID:        1,
+			Username:  "John Doe",
+			Email:     "johndoe@gmail.com",
+			Password:  passwordHash,
+			CreatedAt: time.Date(2026, 6, 23, 12, 0, 0, 0, time.UTC),
+		}, nil)
+
+	tm := newTestManager(t)
+	router := gin.Default()
+	router.POST("/login", Login(store, tm))
+
+	// send wrong password
+	body := bytes.NewBufferString(`{"email":"johndoe@gmail.com","password":"99999999"}`)
+	req := httptest.NewRequest(http.MethodPost, "/login", body)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	// assert that the valid json does not contain a token at all
+	var respBody map[string]string
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	_, ok := respBody["token"]
+	assert.False(t, ok)
+
+	// assert that the message does not specify what is incorrect
+	assert.JSONEq(t, `{"error":"invalid credentials"}`, w.Body.String())
+
 }
 
-func TestLoginInvalidEmail(t *testing.T) {
-	t.Skip()
+// test that an incorrect email / user not found is handled properly
+func TestLoginUserNotFound(t *testing.T) {
+	store := mocks.NewStore(t)
+
+	store.EXPECT().
+		GetUserByEmail("john@gmail.com").
+		Return(types.User{}, types.ErrUserNotFound)
+
+	tm := newTestManager(t)
+	router := gin.Default()
+	router.POST("/login", Login(store, tm))
+
+	// send wrong email
+	body := bytes.NewBufferString(`{"email":"john@gmail.com","password":"12345678"}`)
+	req := httptest.NewRequest(http.MethodPost, "/login", body)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// NOTE: it should always be the same as no password, never 404 
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	// assert that the valid json does not contain a token at all
+	var respBody map[string]string
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	_, ok := respBody["token"]
+	assert.False(t, ok)
+
+	// assert that the message does not specify what is incorrect
+	assert.JSONEq(t, `{"error":"invalid credentials"}`, w.Body.String())
 }
 
 // tests for missing fields
@@ -262,10 +323,29 @@ func TestLogin(t *testing.T) {
 	t.Skip()
 }
 
-func TestLoginUserNotFound(t *testing.T) {
-	t.Skip()
-}
+
 
 func TestLoginStoreError(t *testing.T) {
-	t.Skip()
+	store := mocks.NewStore(t)
+
+	store.EXPECT().
+		GetUserByEmail("johndoe@gmail.com").
+		Return(types.User{}, errors.New("database unavailable"))
+
+	tm := newTestManager(t)
+	router := gin.Default()
+	router.POST("/login", Login(store, tm))
+
+	body := bytes.NewBufferString(`{"email":"johndoe@gmail.com","password":"12345678"}`)
+	req := httptest.NewRequest(http.MethodPost, "/login", body)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	// assert that the valid json does not contain a token at all
+	var respBody map[string]string
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	_, ok := respBody["token"]
+	assert.False(t, ok)
 }
