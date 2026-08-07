@@ -3,7 +3,6 @@ package handlers
 import (
 	"errors"
 	"net/http"
-	"splitnow/auth-service/internal/token"
 	"splitnow/auth-service/internal/types"
 
 	"github.com/gin-gonic/gin"
@@ -13,6 +12,10 @@ import (
 type Store interface {
 	CreateUser(email, username, password string) (types.User, error)
 	GetUserByEmail(email string) (types.User, error)
+}
+
+type TokenIssuer interface {
+	Issue(userID int, username string) (string, error)
 }
 
 func HashPassword(password string) (string, error) {
@@ -62,7 +65,7 @@ func CreateUser(s Store) gin.HandlerFunc {
 }
 
 // verifies user credentials and returns a signed JWT or an error
-func Login(s Store, tm *token.Manager) gin.HandlerFunc {
+func Login(s Store, tm TokenIssuer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input struct {
 			Email    string `json:"email" binding:"required"`

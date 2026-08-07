@@ -301,7 +301,7 @@ func TestLoginUserNotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	// NOTE: it should always be the same as no password, never 404 
+	// NOTE: it should always be the same as no password, never 404
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 	// assert that the valid json does not contain a token at all
@@ -316,14 +316,34 @@ func TestLoginUserNotFound(t *testing.T) {
 
 // tests for missing fields
 func TestLoginInvalidBody(t *testing.T) {
-	t.Skip()
+	tm := newTestManager(t)
+	router := gin.Default()
+	router.POST("/login", Login(mocks.NewStore(t), tm))
+
+	cases := []struct {
+		name string
+		body string
+	}{
+		{"missing email", `{"password":"12345678"}`},
+		{"missing password", `{"email":"johndoe@gmail.com"}`},
+		{"missing both", `{}`},
+		{"empty email", `{"email":"","password":"12345678"}`},
+		{"wrong type", `{"email":123,"password":"12345678"}`},
+		{"malformed json", `{"email":`},
+		{"empty body", ``},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewBufferString(tc.body))
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.JSONEq(t, `{"error":"email and password are required"}`, w.Body.String())
+		})
+	}
 }
-
-func TestLogin(t *testing.T) {
-	t.Skip()
-}
-
-
 
 func TestLoginStoreError(t *testing.T) {
 	store := mocks.NewStore(t)
@@ -348,4 +368,33 @@ func TestLoginStoreError(t *testing.T) {
 	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
 	_, ok := respBody["token"]
 	assert.False(t, ok)
+}
+
+type failingTokenIssuer struct{}
+
+func (failingTokenIssuer) Issue(userID int, username string) (string, error) {
+	return "", errors.New("signing failed")
+}
+
+func TestLoginTokenIssueError(t *testing.T) {
+	store := mocks.NewStore(t)
+	passwordHash, err := HashPassword("12345678")
+	assert.NoError(t, err)
+
+	store.EXPECT().
+		GetUserByEmail("johndoe@gmail.com").
+		Return(types.User{
+			ID: 1, Username: "John Doe", Email: "johndoe@gmail.com", Password: passwordHash,
+		}, nil)
+
+	router := gin.Default()
+	router.POST("/login", Login(store, failingTokenIssuer{}))
+
+	body := bytes.NewBufferString(`{"email":"johndoe@gmail.com","password":"12345678"}`)
+	req := httptest.NewRequest(http.MethodPost, "/login", body)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.JSONEq(t, `{"error":"failed to create token"}`, w.Body.String())
 }
