@@ -2,11 +2,16 @@ package handlers
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +22,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"splitnow/auth-service/internal/handlers/mocks"
+	"splitnow/auth-service/internal/token"
 	"splitnow/auth-service/internal/types"
 )
 
@@ -171,4 +177,95 @@ func TestHashPassword(t *testing.T) {
 func TestHashPasswordTooLong(t *testing.T) {
 	_, err := HashPassword(strings.Repeat("a", 73))
 	assert.ErrorIs(t, err, bcrypt.ErrPasswordTooLong)
+}
+
+//===== Tests for POST "/login" =====//
+
+func newTestManager(t *testing.T) *token.Manager {
+	t.Helper()
+
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	assert.NoError(t, err)
+
+	dir := t.TempDir()
+	privatePath := filepath.Join(dir, "private.pem")
+	publicPath := filepath.Join(dir, "public.pem")
+
+	privateDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	assert.NoError(t, err)
+	assert.NoError(t, os.WriteFile(privatePath,
+		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateDER}), 0600))
+
+	publicDER, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	assert.NoError(t, err)
+	assert.NoError(t, os.WriteFile(publicPath,
+		pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: publicDER}), 0600))
+
+	mgr, err := token.New(privatePath, publicPath)
+	assert.NoError(t, err)
+
+	return mgr
+}
+
+func TestLoginValidCredentials(t *testing.T) {
+	store := mocks.NewStore(t)
+	passwordHash, err := HashPassword("12345678")
+	assert.NoError(t, err)
+
+	store.EXPECT().
+		GetUserByEmail("johndoe@gmail.com").
+		Return(types.User{
+			ID:        1,
+			Username:  "John Doe",
+			Email:     "johndoe@gmail.com",
+			Password:  passwordHash,
+			CreatedAt: time.Date(2026, 6, 23, 12, 0, 0, 0, time.UTC),
+		}, nil)
+
+	tm := newTestManager(t)
+	router := gin.Default()
+	router.POST("/login", Login(store, tm))
+
+	body := bytes.NewBufferString(`{"email":"johndoe@gmail.com","password":"12345678"}`)
+	req := httptest.NewRequest(http.MethodPost, "/login", body)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// assert that its valid json containing a token field with some token
+	var respBody map[string]string
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	tokenString, ok := respBody["token"]
+	assert.True(t, ok)
+
+	claims, err := tm.Verify(tokenString)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, claims.UserID)
+	assert.Equal(t, "John Doe", claims.Username)
+}
+
+func TestLoginInvalidPassword(t *testing.T) {
+	t.Skip()
+}
+
+func TestLoginInvalidEmail(t *testing.T) {
+	t.Skip()
+}
+
+// tests for missing fields
+func TestLoginInvalidBody(t *testing.T) {
+	t.Skip()
+}
+
+func TestLogin(t *testing.T) {
+	t.Skip()
+}
+
+func TestLoginUserNotFound(t *testing.T) {
+	t.Skip()
+}
+
+func TestLoginStoreError(t *testing.T) {
+	t.Skip()
 }
