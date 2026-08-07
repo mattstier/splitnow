@@ -5,6 +5,7 @@ import (
 	"errors"
 	"splitnow/auth-service/internal/types"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -31,4 +32,21 @@ func CreateUser(email, username, password string) (types.User, error) {
 		return types.User{}, err
 	}
 	return user, nil
+}
+
+func GetUserByEmail(email string) (types.User, error) {
+	row := Pool.QueryRow(context.Background(),
+		`SELECT id, email, username, password, created_at 
+		FROM users WHERE email = $1`, email)
+
+	var user types.User
+	err := row.Scan(&user.ID, &user.Email, &user.Username, &user.Password, &user.CreatedAt)
+	if err != nil {
+		// if the error is that there is no rows returned,
+		// return the appropriate error
+		if errors.Is(err, pgx.ErrNoRows) {
+			return types.User{}, types.ErrUserNotFound
+		}
+	}
+	return user, err
 }

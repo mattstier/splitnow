@@ -79,6 +79,62 @@ func (_c *Store_CreateUser_Call) RunAndReturn(run func(string, string, string) (
 	return _c
 }
 
+// GetUserByEmail provides a mock function with given fields: email
+func (_m *Store) GetUserByEmail(email string) (types.User, error) {
+	ret := _m.Called(email)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetUserByEmail")
+	}
+
+	var r0 types.User
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string) (types.User, error)); ok {
+		return rf(email)
+	}
+	if rf, ok := ret.Get(0).(func(string) types.User); ok {
+		r0 = rf(email)
+	} else {
+		r0 = ret.Get(0).(types.User)
+	}
+
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(email)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Store_GetUserByEmail_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetUserByEmail'
+type Store_GetUserByEmail_Call struct {
+	*mock.Call
+}
+
+// GetUserByEmail is a helper method to define mock.On call
+//   - email string
+func (_e *Store_Expecter) GetUserByEmail(email interface{}) *Store_GetUserByEmail_Call {
+	return &Store_GetUserByEmail_Call{Call: _e.mock.On("GetUserByEmail", email)}
+}
+
+func (_c *Store_GetUserByEmail_Call) Run(run func(email string)) *Store_GetUserByEmail_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *Store_GetUserByEmail_Call) Return(_a0 types.User, _a1 error) *Store_GetUserByEmail_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *Store_GetUserByEmail_Call) RunAndReturn(run func(string) (types.User, error)) *Store_GetUserByEmail_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewStore creates a new instance of Store. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewStore(t interface {

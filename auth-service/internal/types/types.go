@@ -15,3 +15,4 @@ type User struct {
 
 var ErrEmailTaken = errors.New("email already taken")
 var ErrUsernameTaken = errors.New("username already taken")
+var ErrUserNotFound = errors.New("user not found")
