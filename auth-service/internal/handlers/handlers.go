@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"splitnow/auth-service/internal/token"
 	"splitnow/auth-service/internal/types"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,7 @@ import (
 
 type Store interface {
 	CreateUser(email, username, password string) (types.User, error)
+	GetUserByEmail(email string) (types.User, error)
 }
 
 func HashPassword(password string) (string, error) {
@@ -56,5 +58,47 @@ func CreateUser(s Store) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusCreated, user)
+	}
+}
+
+// verifies user credentials and returns a signed JWT or an error
+func Login(s Store, tm *token.Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var input struct {
+			Email    string `json:"email" binding:"required"`
+			Password string `json:"password" binding:"required"`
+		}
+
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "email and password are required"})
+			return
+		}
+
+		user, err := s.GetUserByEmail(input.Email)
+		if err != nil {
+			if errors.Is(err, types.ErrUserNotFound) {
+				// NOTE: don't reveal whether the email exists
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch user"})
+			return
+		}
+
+		err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password))
+		if err != nil {
+			// NOTE: wrong password is not specified on purpose
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+			return
+		}
+
+		// creating the JWT 
+		tokenString, err := tm.Issue(user.ID, user.Username)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create token"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"token": tokenString})
 	}
 }
