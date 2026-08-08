@@ -1,0 +1,26 @@
+services:
+  chat:
+    build: .
+    # host uid, peer auth maps to the OS user's role
+    user: "1000:1000" 
+    ports: ["8080:8080"]
+    volumes:
+      - /var/run/postgresql:/var/run/postgresql # host socket
+      - ./keys:/keys:ro
+    environment:
+      JWT_PUBLIC_KEY_PATH: /keys/jwt_public.pem
+      # DB_URL omitted, config default: postgres:///splitnow?host=/var/run/postgresql
+      REDIS_ADDR: host.docker.internal:6379
+    extra_hosts: ["host.docker.internal:host-gateway"]
+
+  auth-service:
+    build: ./auth-service
+    user: "1000:1000"
+    ports: ["8081:8081"]
+    volumes:
+      - /var/run/postgresql:/var/run/postgresql
+      - ./auth-service/keys:/keys:ro
+    environment:
+      JWT_PRIVATE_KEY_PATH: /keys/jwt_private.pem
+      JWT_PUBLIC_KEY_PATH: /keys/jwt_public.pem
+      # DB_URL default -> splitnow_auth via socket
