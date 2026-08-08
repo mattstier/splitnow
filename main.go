@@ -5,12 +5,15 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"splitnow/db"
+	"splitnow/internal/config"
 	"splitnow/internal/handlers"
 )
 
 func main() {
+	cfg := config.Load()
+
 	// connnecting to the splitnow db with root user (for now)
-	err := db.Connect("postgres:///splitnow?host=/var/run/postgresql")
+	err := db.Connect(cfg.DBURL)
 	if err != nil {
 		println("Failed to connect to db, reason: ", err)
 	}
@@ -18,7 +21,7 @@ func main() {
 	store := db.Store{}
 
 	redisClient := redis.NewClient(
-		&redis.Options{Addr: "localhost:6379"})
+		&redis.Options{Addr: cfg.RedisAddr})
 
 	r := gin.Default()
 	r.GET("/health", handlers.Health)
@@ -26,5 +29,5 @@ func main() {
 	r.POST("/rooms", handlers.CreateRoom(store))
 	r.GET("/rooms", handlers.GetRooms(store))
 	r.GET("/ws", handlers.WS(store, redisClient))
-	r.Run()
+	r.Run(":" + cfg.Port)
 }
