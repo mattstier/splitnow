@@ -36,10 +36,18 @@ func main() {
 	r.GET("/health", handlers.Health)
 
 	// Endpoints requiring authorization
-	r.GET("/messages", handlers.RequireAuth(tm), handlers.GetMessages(store))
-	r.POST("/rooms", handlers.RequireAuth(tm), handlers.CreateRoom(store))
-	r.GET("/rooms", handlers.RequireAuth(tm), handlers.GetRooms(store))
-	r.GET("/ws", handlers.WS(store, redisClient))
+	r.GET("/messages",
+		handlers.RequireAuth(tm, handlers.ExtractFromHeader),
+		handlers.GetMessages(store))
+	r.POST("/rooms",
+		handlers.RequireAuth(tm, handlers.ExtractFromHeader),
+		handlers.CreateRoom(store))
+	r.GET("/rooms",
+		handlers.RequireAuth(tm, handlers.ExtractFromHeader),
+		handlers.GetRooms(store))
+	r.GET("/ws",
+		handlers.RequireAuth(tm, handlers.ExtractFromQuery),
+		handlers.WS(store, redisClient))
 
 	r.Run(":" + cfg.Port)
 }

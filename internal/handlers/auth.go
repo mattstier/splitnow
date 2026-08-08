@@ -9,12 +9,26 @@ import (
 	"splitnow/internal/token"
 )
 
-func RequireAuth(tm *token.Manager) gin.HandlerFunc {
+// TokenExtractor enables injecting the a strategy depending on
+// the protocol of the endpoint
+type TokenExtractor func(c *gin.Context) (string, bool)
+
+// token extraction strategy for REST endpoint(s), extracts token from the header
+func ExtractFromHeader(c *gin.Context) (string, bool) {
+	return strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
+}
+
+// token extraction strategy for WS endpoint(s), extracts token from the query param 
+func ExtractFromQuery(c *gin.Context) (string, bool) {
+	token := c.Query("token")
+	return token, token != ""
+}
+
+func RequireAuth(tm *token.Manager, extractToken TokenExtractor) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		header := c.GetHeader("Authorization")
-		tokenString, ok := strings.CutPrefix(header, "Bearer ")
+		tokenString, ok := extractToken(c) 
 		if !ok || tokenString == "" {
-			// same as .JSON, but ensures that it breaks the chain, even if no return is called 
+			// same as .JSON, but ensures that it breaks the chain, even if no return is called
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}

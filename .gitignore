@@ -9,3 +9,4 @@ frontend/dist
 *.exe
 cover.out
 auth-service/keys/
+keys/
