@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"splitnow/internal/handlers/mocks"
+	"splitnow/internal/token"
 	"splitnow/internal/types"
 )
 
@@ -50,7 +51,13 @@ func setupWS(t *testing.T, store Store, rdb *redis.Client) *websocket.Conn {
 	t.Cleanup(resetChatRooms)
 
 	r := gin.New()
-	r.GET("/ws", WS(store, rdb))
+	r.GET("/ws",
+		// fake auth, replaces RequireAuth
+		func(c *gin.Context) {
+			c.Set("user", &token.Claims{UserID: 42, Username: "John Doe"})
+			c.Next()
+		},
+		WS(store, rdb))
 
 	server := httptest.NewServer(r)
 	t.Cleanup(server.Close)

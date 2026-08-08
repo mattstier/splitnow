@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 
+	"splitnow/internal/token"
 	"splitnow/internal/types"
 )
 
@@ -31,10 +32,11 @@ type chatRoom struct {
 
 // client is one websocket connection and the rooms it is subscribed to
 type wsClient struct {
-	id    string
-	mu    sync.Mutex
-	conn  *websocket.Conn
-	rooms map[int]struct{}
+	id       string
+	username string
+	mu       sync.Mutex
+	conn     *websocket.Conn
+	rooms    map[int]struct{}
 }
 
 type wsDeps struct {
@@ -155,7 +157,7 @@ func (ws wsDeps) handleSendMessage(client *wsClient, frame msgFrame) {
 		client.conn.WriteMessage(websocket.TextMessage, data)
 		return
 	}
-	saved, err := ws.store.CreateMessage(frame.Room, "John Doe", frame.Content)
+	saved, err := ws.store.CreateMessage(frame.Room, client.username, frame.Content)
 	if err != nil {
 		println("failed to save message:", err)
 		return
@@ -195,10 +197,14 @@ func WS(s Store, redisClient *redis.Client) gin.HandlerFunc {
 			return
 		}
 
+		// claim of the JWT of the authorized user
+		claims := c.MustGet("user").(*token.Claims)
+
 		client := &wsClient{
-			id:    fmt.Sprintf("conn-%d", connCounter.Add(1)),
-			conn:  conn,
-			rooms: make(map[int]struct{}),
+			id:       fmt.Sprintf("conn-%d", connCounter.Add(1)),
+			conn:     conn,
+			username: claims.Username,
+			rooms:    make(map[int]struct{}),
 		}
 		deps := wsDeps{store: s, redisClient: redisClient}
 		for {
