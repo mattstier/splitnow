@@ -21,7 +21,7 @@ func main() {
 		println("Failed to connect to db, reason: ", err)
 	}
 
-	// loads + parses both PEM keys
+	// loads + parses the public PEM key only 
 	tm, err := token.New(cfg.JWTPublicKeyPath)
 	if err != nil {
 		log.Fatal(err)
