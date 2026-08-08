@@ -1,12 +1,15 @@
 package main
 
 import (
+	"log"
+
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 
 	"splitnow/db"
 	"splitnow/internal/config"
 	"splitnow/internal/handlers"
+	"splitnow/internal/token"
 )
 
 func main() {
@@ -18,6 +21,12 @@ func main() {
 		println("Failed to connect to db, reason: ", err)
 	}
 
+	// loads + parses both PEM keys
+	tm, err := token.New(cfg.JWTPublicKeyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	store := db.Store{}
 
 	redisClient := redis.NewClient(
@@ -25,9 +34,12 @@ func main() {
 
 	r := gin.Default()
 	r.GET("/health", handlers.Health)
-	r.GET("/messages", handlers.GetMessages(store))
-	r.POST("/rooms", handlers.CreateRoom(store))
-	r.GET("/rooms", handlers.GetRooms(store))
+
+	// Endpoints requiring authorization
+	r.GET("/messages", handlers.RequireAuth(tm), handlers.GetMessages(store))
+	r.POST("/rooms", handlers.RequireAuth(tm), handlers.CreateRoom(store))
+	r.GET("/rooms", handlers.RequireAuth(tm), handlers.GetRooms(store))
 	r.GET("/ws", handlers.WS(store, redisClient))
+
 	r.Run(":" + cfg.Port)
 }
