@@ -9,6 +9,8 @@ function App() {
   const [token, setToken] = useState(() => localStorage.getItem('token') || '')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('')
+  const [mode, setMode] = useState('login')
   const [loginError, setLoginError] = useState('')
   const [room, setRoom] = useState(null)
   const [rooms, setRooms] = useState([])
@@ -27,6 +29,11 @@ function App() {
       return res
     })
 
+  const finishAuth = (data) => {
+    localStorage.setItem('token', data.token)
+    setToken(data.token)
+  }
+
   const login = () => {
     fetch('/login', {
       method: 'POST',
@@ -37,12 +44,30 @@ function App() {
         if (!res.ok) { setLoginError('invalid credentials'); return null }
         return res.json()
       })
-      .then(data => {
-        if (!data) return
-        localStorage.setItem('token', data.token)
-        setToken(data.token)
-      })
+      .then(data => { if (data) finishAuth(data) })
   }
+
+  const register = () => {
+    fetch('/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, username, password })
+    })
+      .then(res => {
+        if (res.status === 409) { setLoginError('username or email already taken'); return null }
+        if (!res.ok) { setLoginError('registration failed'); return null }
+        // /users returns no token, so log in right after
+        return fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        })
+      })
+      .then(res => res && res.json())
+      .then(data => data && finishAuth(data))
+  }
+
+  const submit = mode === 'login' ? login : register
 
   // registers a new room and joins it
   const createRoom = () => {
@@ -107,7 +132,16 @@ function App() {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-zinc-900 text-white">
         <div className="w-80 space-y-4">
-          <h1 className="text-lg font-semibold text-center">Log in</h1>
+          <h1 className="text-lg font-semibold text-center">{mode === 'login' ? 'Log in' : 'Register'}</h1>
+          {mode === 'register' && (
+            <input
+              type="text"
+              className="w-full bg-zinc-800 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Username"
+            />
+          )}
           <input
             type="email"
             className="w-full bg-zinc-800 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
@@ -120,14 +154,20 @@ function App() {
             className="w-full bg-zinc-800 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && login()}
+            onKeyDown={(e) => e.key === 'Enter' && submit()}
             placeholder="Password"
           />
           <button
             className="w-full bg-blue-600 hover:bg-blue-700 rounded-lg px-6 py-2 font-medium cursor-pointer"
-            onClick={login}
+            onClick={submit}
           >
-            Log in
+            {mode === 'login' ? 'Log in' : 'Register'}
+          </button>
+          <button
+            className="w-full text-zinc-400 hover:text-white text-sm cursor-pointer"
+            onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setLoginError('') }}
+          >
+            {mode === 'login' ? 'need an account? Register' : 'have an account? Log in'}
           </button>
           {loginError && <p className="text-red-500 text-sm text-center">{loginError}</p>}
         </div>
