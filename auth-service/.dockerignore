@@ -1,8 +1,4 @@
-### DOCKERIGNORE OF THE CHAT SERVICE ###    
-
-# other services
-auth-service/    
-frontend/        
+### DOCKERIGNORE OF THE AUTH SERVICE ###    
 
 # keys purposefully not baked into an image as chat only receives the public key 
 # at runtime via a mounted volume
