@@ -8,3 +8,5 @@ frontend/dist
 .vscode/
 *.exe
 cover.out
+auth-service/keys/
+keys/
