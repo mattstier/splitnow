@@ -6,6 +6,10 @@ const formatTime = (ts) => {
 }
 
 function App() {
+  const [token, setToken] = useState(() => localStorage.getItem('token') || '')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loginError, setLoginError] = useState('')
   const [room, setRoom] = useState(null)
   const [rooms, setRooms] = useState([])
   const [messages, setMessages] = useState([])
@@ -13,10 +17,37 @@ function App() {
   const [newRoomName, setNewRoomName] = useState('')
   const wsRef = useRef(null)
 
+  // makes a fetch with the token attached, and logs out on 401
+  const authedFetch = (url, opts = {}) =>
+    fetch(url, {
+      ...opts,
+      headers: { ...opts.headers, Authorization: 'Bearer ' + token }
+    }).then(res => {
+      if (res.status === 401) setToken('')
+      return res
+    })
+
+  const login = () => {
+    fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    })
+      .then(res => {
+        if (!res.ok) { setLoginError('invalid credentials'); return null }
+        return res.json()
+      })
+      .then(data => {
+        if (!data) return
+        localStorage.setItem('token', data.token)
+        setToken(data.token)
+      })
+  }
+
   // registers a new room and joins it
   const createRoom = () => {
     if (!newRoomName.trim()) return
-    fetch('/rooms', {
+    authedFetch('/rooms', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newRoomName, created_by: 1 })
@@ -31,23 +62,24 @@ function App() {
 
   // load the list of rooms to join
   useEffect(() => {
-    fetch('/rooms')
+    if (!token) return
+    authedFetch('/rooms')
       .then(res => res.json())
       .then(setRooms)
-  }, [])
+  }, [token])
 
   // runs when joining a room, opens a websocket
   useEffect(() => {
     if (!room) return
 
     // get all messages of the given room before opening the socket
-    fetch('/messages?room=' + room.id)
+    authedFetch('/messages?room=' + room.id)
       .then(res => res.json())
       .then(history => {
       setMessages(history.map(m => ({ text: m.content, sender: m.sender, created_at: m.created_at, mine: false })))
     })
 
-    const ws = new WebSocket('ws://localhost:5173/ws')
+    const ws = new WebSocket('ws://localhost:5173/ws?token=' + token)
     ws.onopen = () => ws.send(JSON.stringify({ type: 'subscribe', room: room.id }))
     // here we define the message format with a flag 'mine' to handle own messages
     ws.onmessage = (e) => {
@@ -68,6 +100,39 @@ function App() {
       // clearing text box
       setInput('')
     }
+  }
+
+  // room picker view
+  if (!token) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-zinc-900 text-white">
+        <div className="w-80 space-y-4">
+          <h1 className="text-lg font-semibold text-center">Log in</h1>
+          <input
+            type="email"
+            className="w-full bg-zinc-800 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+          />
+          <input
+            type="password"
+            className="w-full bg-zinc-800 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && login()}
+            placeholder="Password"
+          />
+          <button
+            className="w-full bg-blue-600 hover:bg-blue-700 rounded-lg px-6 py-2 font-medium cursor-pointer"
+            onClick={login}
+          >
+            Log in
+          </button>
+          {loginError && <p className="text-red-500 text-sm text-center">{loginError}</p>}
+        </div>
+      </div>
+    )
   }
 
   // room picker view
