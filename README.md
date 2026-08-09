@@ -80,8 +80,9 @@ npx wscat -c ws://localhost:8080/ws
 > {"type":"unsubscribe","room":1}
 ```
 
-## Kill port
+## Teardown 
 
 ```bash
-fuser -k 8080/tcp
+docker compose down          # stop containers (keeps db-data volume)
+docker compose down -v       # also delete the local db-data volume/data
 ```
