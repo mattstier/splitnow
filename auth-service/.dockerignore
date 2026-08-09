@@ -1,0 +1,28 @@
+### DOCKERIGNORE OF THE AUTH SERVICE ###    
+
+# keys purposefully not baked into an image as chat only receives the public key 
+# at runtime via a mounted volume
+keys/
+scripts/
+
+# schema goes to the postgres container's initdb, not to this image
+sql/
+
+# the binary itself
+splitnow         
+
+# testing artefacts
+cover.out
+.mockery.yaml
+internal/handlers/mocks/
+
+# documentation
+docs/
+*.md             
+
+.git
+.gitignore
+
+Dockerfile
+.dockerignore
+docker-compose.yml

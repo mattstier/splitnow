@@ -14,38 +14,27 @@ To support (horizontal) scalability, modifiability, as well as fault-tolerance, 
 ├── frontend             React + Vite app
 ├── internal/handlers    REST + WebSocket handlers
 ├── main.go              entrypoint, routes, config
-└── sql                  schema migrations
+├── sql                  schema migrations
+├── auth-service         auth backend (JWT), own Dockerfile
+├── docker-compose.yaml  one-command stack: db, redis, chat, auth-service
+├── Dockerfile           chat service image
+└── .dockerignore        chat image build-context excludes
 ```
 
 # Development
 
 ## Dependencies
 
-- Go 1.25+
-- Node.js + npm
-- PostgreSQL
-- Redis (via Docker)
+- Node.js + npm (frontend; backend and services run in Docker)
 
 ## Setup
 
 ```bash
-# Database
-sudo systemctl start postgresql
-
-# Redis (Docker container)
-docker start splitnow-redis   # create once with: docker run -d --name splitnow-redis -p 6379:6379 redis:8.10
-
-# Backend
-go mod tidy
-go run .
-
-# Frontend (separate terminal)
-cd frontend
-npm install
-npm run dev
+docker compose up -d --build   # -d: run in background
+cd frontend && npm install && npm run dev
 ```
 
-Backend runs on `:8080`, frontend on `:5173`, Redis on `:6379`.
+Chat service runs on `:8080`, auth service on `:8081`, frontend on `:5173`.
 
 ## Vite proxy
 
@@ -91,8 +80,9 @@ npx wscat -c ws://localhost:8080/ws
 > {"type":"unsubscribe","room":1}
 ```
 
-## Kill port
+## Teardown 
 
 ```bash
-fuser -k 8080/tcp
+docker compose down          # stop containers (keeps db-data volume)
+docker compose down -v       # also delete the local db-data volume/data
 ```

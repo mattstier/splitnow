@@ -1,0 +1,59 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: splitnow
+      POSTGRES_PASSWORD: splitnow
+      POSTGRES_DB: splitnow
+    volumes:
+      # runs all *.sql on first init only 
+      # NOTE: ",z" flag is needed for SELinux, can be removed on other platforms
+      - ./sql:/docker-entrypoint-initdb.d:ro,z
+      - ./auth-service/sql:/auth-sql:ro,z
+      # named volume "db-data", for persistent db data 
+      - db-data:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+    healthcheck:
+      # other services won't start until postgres is up 
+      test: ["CMD-SHELL", "pg_isready -U splitnow"]
+      interval: 5s
+      retries: 5
+
+  redis:
+    image: redis:8
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  chat:
+    build: .
+    user: "1000:1000" # run as the host uid, so ./keys can be read
+    ports: ["8080:8080"]
+    volumes: ["./keys:/keys:ro"]
+    environment:
+      JWT_PUBLIC_KEY_PATH: /keys/jwt_public.pem
+      # NOTE: local dev only, as ssl is disabled  
+      DB_URL: postgres://splitnow:splitnow@db:5432/splitnow?sslmode=disable
+      REDIS_ADDR: redis:6379
+    depends_on:
+      # only start if db and redis both passed the healthcheck
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  auth-service:
+    build: ./auth-service
+    user: "1000:1000" # run as the host uid, so ./auth-service/keys can be read
+    ports: ["8081:8081"]
+    volumes: ["./auth-service/keys:/keys:ro"]
+    environment:
+      JWT_PRIVATE_KEY_PATH: /keys/jwt_private.pem
+      JWT_PUBLIC_KEY_PATH: /keys/jwt_public.pem
+      # Points at the second database containing user infos
+      DB_URL: postgres://splitnow:splitnow@db:5432/splitnow_auth?sslmode=disable
+    depends_on:
+      # only start if db passed the healthcheck
+      db: { condition: service_healthy }
+
+volumes:
+  db-data:
