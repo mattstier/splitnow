@@ -16,16 +16,45 @@ func RoomExists(roomID int) (bool, error) {
 	return exists, err
 }
 
+// creates a room with a given name, and creator
+// and adds creator to the membership table in the same transaction
+// if either fails, both are rolled back
 func CreateRoom(name string, creator int) (types.Room, error) {
-	row := Pool.QueryRow(context.Background(),
+	// start transaction,
+	tx, err := Pool.Begin(context.Background())
+	if err != nil {
+		return types.Room{}, err
+	}
+	// rollback if it fails before the commit
+	defer tx.Rollback(context.Background())
+
+	// create room in db, return it as Room struct
+	row := tx.QueryRow(context.Background(),
 		`INSERT INTO rooms (name, created_by)
          VALUES ($1, $2)
          RETURNING id, name, created_by, created_at`,
 		name, creator)
 
 	var r types.Room
-	err := row.Scan(&r.ID, &r.Name, &r.CreatedBy, &r.CreatedAt)
-	return r, err
+	if err := row.Scan(&r.ID, &r.Name, &r.CreatedBy, &r.CreatedAt); err != nil {
+		return types.Room{}, err
+	}
+
+	// creator added their own room (that the queryRow returned) as a member, idempotent
+	_, err = tx.Exec(context.Background(),
+		`INSERT INTO memberships (room_id, user_id)
+         VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+		r.ID, creator)
+	if err != nil {
+		return types.Room{}, err
+	}
+
+	// applies transaction changes
+	if err := tx.Commit(context.Background()); err != nil {
+		return types.Room{}, err
+	}
+	return r, nil
 }
 
 func GetAllRooms() ([]types.Room, error) {
