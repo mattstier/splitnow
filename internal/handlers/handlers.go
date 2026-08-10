@@ -20,6 +20,7 @@ type Store interface {
 	RoomExists(roomID int) (bool, error)
 	AddMember(userID, roomID int) (types.Membership, error)
 	IsMember(userID, roomID int) (bool, error)
+	GetUserRooms(userID int) ([]types.Room, error)
 }
 
 func Health(c *gin.Context) {
@@ -58,7 +59,7 @@ func GetMessages(s Store) gin.HandlerFunc {
 func CreateRoom(s Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input struct {
-			Name      string `json:"name" binding:"required"`
+			Name string `json:"name" binding:"required"`
 		}
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(400, gin.H{"error": "invalid body"})
@@ -131,5 +132,19 @@ func AddMember(s Store) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusCreated, membership)
+	}
+}
+
+func GetUserRooms(s Store) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// getting the userID from the JWT directly
+		claims := c.MustGet("user").(*token.Claims)
+		rooms, err := s.GetUserRooms(claims.UserID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch rooms"})
+			return
+		}
+
+		c.JSON(http.StatusOK, rooms)
 	}
 }

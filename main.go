@@ -45,9 +45,13 @@ func main() {
 	r.GET("/rooms",
 		handlers.RequireAuth(tm, handlers.ExtractFromHeader),
 		handlers.GetRooms(store))
+	r.GET("/rooms/mine",
+		handlers.RequireAuth(tm, handlers.ExtractFromHeader),
+		handlers.GetUserRooms(store))
 	r.POST("/rooms/:room_id/join",
 		handlers.RequireAuth(tm, handlers.ExtractFromHeader),
 		handlers.AddMember(store))
+
 	r.GET("/ws",
 		handlers.RequireAuth(tm, handlers.ExtractFromQuery),
 		handlers.WS(store, redisClient))

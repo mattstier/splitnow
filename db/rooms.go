@@ -77,3 +77,16 @@ func GetRoomsWithName(name string) ([]types.Room, error) {
 	}
 	return pgx.CollectRows(rows, pgx.RowToStructByName[types.Room])
 }
+
+func GetUserRooms(userID int) ([]types.Room, error) {
+	rows, err := Pool.Query(context.Background(),
+		`SELECT id, name, created_by, created_at 
+	     FROM memberships, rooms 
+		 WHERE user_id = $1 
+		 AND rooms.id = memberships.room_id`, userID)
+
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[types.Room])
+}
