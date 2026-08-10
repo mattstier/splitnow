@@ -75,7 +75,7 @@ function App() {
     authedFetch('/rooms', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newRoomName, created_by: 1 })
+      body: JSON.stringify({ name: newRoomName })
     })
       .then(res => { if (!res.ok) return; return res.json() })
       .then(r => {

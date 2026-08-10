@@ -59,14 +59,14 @@ func CreateRoom(s Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input struct {
 			Name      string `json:"name" binding:"required"`
-			CreatedBy int    `json:"created_by" binding:"required"`
 		}
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(400, gin.H{"error": "invalid body"})
 			return
 		}
 
-		room, err := s.CreateRoom(input.Name, input.CreatedBy)
+		claims := c.MustGet("user").(*token.Claims)
+		room, err := s.CreateRoom(input.Name, claims.UserID)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "failed to create room"})
 			return
