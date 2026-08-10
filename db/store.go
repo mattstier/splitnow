@@ -27,3 +27,7 @@ func (Store) GetAllRooms() ([]types.Room, error) {
 func (Store) GetRoomsWithName(name string) ([]types.Room, error) {
 	return GetRoomsWithName(name)
 }
+
+func (Store) AddMember(userID, roomID int) (types.Membership, error) {
+	return AddMember(userID, roomID)
+}

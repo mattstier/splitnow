@@ -1,6 +1,9 @@
 package types
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 type Message struct {
 	ID        int       `json:"id"`
@@ -16,3 +19,10 @@ type Room struct {
 	CreatedBy int       `json:"created_by"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+type Membership struct {
+	UserID int `json:"user_id"`
+	RoomID int `json:"room_id"`
+}
+
+var ErrRoomAlreadyJoined = errors.New("room already joined")

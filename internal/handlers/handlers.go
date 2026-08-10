@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"errors"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 
+	"splitnow/internal/token"
 	"splitnow/internal/types"
 )
 
@@ -14,7 +17,8 @@ type Store interface {
 	CreateRoom(name string, creator int) (types.Room, error)
 	GetAllRooms() ([]types.Room, error)
 	GetRoomsWithName(name string) ([]types.Room, error)
-	RoomExists(roomID int)(bool, error)
+	RoomExists(roomID int) (bool, error)
+	AddMember(userID, roomID int) (types.Membership, error)
 }
 
 func Health(c *gin.Context) {
@@ -78,5 +82,42 @@ func GetRooms(s Store) gin.HandlerFunc {
 			return
 		}
 		c.JSON(200, rooms)
+	}
+}
+
+// add a member to a room
+func AddMember(s Store) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// getting the userID from the JWT directly
+		claims := c.MustGet("user").(*token.Claims)
+		roomID, err := strconv.Atoi(c.Param("room_id"))
+
+		// check that param room is a valid int
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid roomID format"})
+			return
+		}
+
+		roomExists, err := s.RoomExists(roomID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch room"})
+			return
+		}
+
+		if !roomExists {
+			c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
+			return
+		}
+
+		membership, err := s.AddMember(claims.UserID, roomID)
+		if err != nil {
+			if errors.Is(err, types.ErrRoomAlreadyJoined) {
+				c.JSON(http.StatusConflict, gin.H{"error": "room already joined"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add member"})
+			return
+		}
+		c.JSON(http.StatusCreated, membership)
 	}
 }
