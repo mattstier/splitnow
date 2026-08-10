@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"splitnow/internal/handlers/mocks"
+	"splitnow/internal/token"
 	"splitnow/internal/types"
 )
 
@@ -21,6 +22,15 @@ import (
 func TestMain(m *testing.M) {
 	gin.SetMode(gin.TestMode)
 	os.Exit(m.Run())
+}
+
+// fakeAuth replaces RequireAuth in handler tests, setting the claims in the
+// context just like the WS setup does
+func fakeAuth(claims *token.Claims) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Set("user", claims)
+		c.Next()
+	}
 }
 
 //===== Tests for POST "/rooms" =====//
@@ -383,6 +393,133 @@ func TestGetRoomsWithNameStoreError(t *testing.T) {
 	router.GET("/rooms", GetRooms(store))
 
 	req := httptest.NewRequest(http.MethodGet, "/rooms?name=room1", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+//===== Tests for POST "/rooms/:room_id/join" =====//
+
+// testing AddMember REST endpoint (positive case)
+func TestAddMember(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(true, nil)
+	store.EXPECT().
+		AddMember(42, 1).
+		Return(types.Membership{RoomID: 1, UserID: 42}, nil)
+
+	router := gin.New()
+	router.POST("/rooms/:room_id/join",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		AddMember(store))
+
+	req := httptest.NewRequest(http.MethodPost, "/rooms/1/join", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+
+	var membership types.Membership
+	err := json.Unmarshal(w.Body.Bytes(), &membership)
+	assert.NoError(t, err)
+	assert.Equal(t, types.Membership{RoomID: 1, UserID: 42}, membership)
+}
+
+// testing AddMember with an non-existent roomID (negative case)
+func TestAddMemberRoomDoesNotExist(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(999).
+		Return(false, nil)
+
+	router := gin.New()
+	router.POST("/rooms/:room_id/join",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		AddMember(store))
+
+	req := httptest.NewRequest(http.MethodPost, "/rooms/999/join", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// testing AddMember with an invalid roomID (negative case)
+func TestAddMemberInvalidRoomIDFormat(t *testing.T) {
+	store := mocks.NewStore(t)
+
+	router := gin.New()
+	router.POST("/rooms/:room_id/join",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		AddMember(store))
+
+	req := httptest.NewRequest(http.MethodPost, "/rooms/foo/join", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// testing AddMember idempotency
+func TestAddMemberAlreadyJoined(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(true, nil)
+	store.EXPECT().
+		AddMember(42, 1).
+		Return(types.Membership{}, types.ErrRoomAlreadyJoined)
+
+	router := gin.New()
+	router.POST("/rooms/:room_id/join",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		AddMember(store))
+
+	req := httptest.NewRequest(http.MethodPost, "/rooms/1/join", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusConflict, w.Code)
+}
+
+// testing AddMember with a store error in the chat service
+func TestAddMemberStoreError(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(true, nil)
+	store.EXPECT().
+		AddMember(42, 1).
+		Return(types.Membership{}, errors.New("database unavailable"))
+
+	router := gin.New()
+	router.POST("/rooms/:room_id/join",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		AddMember(store))
+
+	req := httptest.NewRequest(http.MethodPost, "/rooms/1/join", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// testing AddMember with a store error when fetching rooms
+func TestAddMemberRoomExistsError(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(false, errors.New("database unavailable"))
+
+	router := gin.New()
+	router.POST("/rooms/:room_id/join",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		AddMember(store))
+
+	req := httptest.NewRequest(http.MethodPost, "/rooms/1/join", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
