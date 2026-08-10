@@ -19,6 +19,7 @@ type Store interface {
 	GetRoomsWithName(name string) ([]types.Room, error)
 	RoomExists(roomID int) (bool, error)
 	AddMember(userID, roomID int) (types.Membership, error)
+	IsMember(userID, roomID int) (bool, error)
 }
 
 func Health(c *gin.Context) {
@@ -33,6 +34,17 @@ func GetMessages(s Store) gin.HandlerFunc {
 			c.JSON(400, gin.H{"error": "roomID required"})
 			return
 		}
+
+		// get UID from the JWT, check if its a member
+		claims := c.MustGet("user").(*token.Claims)
+		isMember, err := s.IsMember(claims.UserID, roomID)
+
+		if !isMember {
+			// reject non-members before fetching any messages
+			c.JSON(http.StatusForbidden, gin.H{"error": "failed to fetch messages"})
+			return
+		}
+
 		messages, err := s.GetMessagesByRoom(roomID)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "failed to fetch messages"})

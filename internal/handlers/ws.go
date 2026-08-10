@@ -33,6 +33,7 @@ type chatRoom struct {
 // client is one websocket connection and the rooms it is subscribed to
 type wsClient struct {
 	id       string
+	userID   int
 	username string
 	mu       sync.Mutex
 	conn     *websocket.Conn
@@ -125,6 +126,18 @@ func (ws wsDeps) handleSubscribe(client *wsClient, frame msgFrame) {
 		client.conn.WriteMessage(websocket.TextMessage, data)
 		return
 	}
+
+	// only members can subscribe to a room
+	isMember, err := ws.store.IsMember(client.userID, frame.Room)
+	if err != nil {
+		println("failed to check membership:", err)
+		return
+	}
+	if !isMember {
+		data, _ := json.Marshal(errorFrame{Type: "error", Room: frame.Room, Message: "not a member of room"})
+		client.conn.WriteMessage(websocket.TextMessage, data)
+		return
+	}
 	room := getChatRoom(frame.Room)
 
 	// subscribe on redis and register locally
@@ -202,6 +215,7 @@ func WS(s Store, redisClient *redis.Client) gin.HandlerFunc {
 
 		client := &wsClient{
 			id:       fmt.Sprintf("conn-%d", connCounter.Add(1)),
+			userID:   claims.UserID,
 			conn:     conn,
 			username: claims.Username,
 			rooms:    make(map[int]struct{}),

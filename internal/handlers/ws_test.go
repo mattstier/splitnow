@@ -85,6 +85,10 @@ func TestWSHandshake(t *testing.T) {
 func TestWSSubscribeValidRoom(t *testing.T) {
 	store := mocks.NewStore(t)
 	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil)
+	
+	store.EXPECT().
 		RoomExists(1).
 		Return(true, nil)
 
@@ -106,6 +110,9 @@ func TestWSSendMessage(t *testing.T) {
 	store := mocks.NewStore(t)
 	store.EXPECT().
 		RoomExists(1).
+		Return(true, nil)
+	store.EXPECT().
+		IsMember(42, 1).
 		Return(true, nil)
 	store.EXPECT().
 		CreateMessage(1, "John Doe", "hello").
@@ -162,9 +169,13 @@ func TestWSSendMessageNotSubscribed(t *testing.T) {
 // TODO: notify the sender on save failure
 func TestWSSendMessageStoreError(t *testing.T) {
 	store := mocks.NewStore(t)
+
 	store.EXPECT().
 		RoomExists(1).
 		Return(true, nil) // needed for the subscribe step
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil)
 	store.EXPECT().
 		CreateMessage(1, "John Doe", "hello").
 		Return(types.Message{}, errors.New("db down"))
@@ -199,7 +210,6 @@ func TestWSSubscribeNonexistentRoom(t *testing.T) {
 	store.EXPECT().
 		RoomExists(999).
 		Return(false, nil)
-
 	_, rdb := newTestRedis(t)
 	conn := setupWS(t, store, rdb)
 
@@ -280,6 +290,9 @@ func TestWSUnknownFrameType(t *testing.T) {
 
 func TestWSUnsubscribe(t *testing.T) {
 	store := mocks.NewStore(t)
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil)
 	store.EXPECT().RoomExists(1).Return(true, nil) // needed for the subscribe step
 
 	mr, rdb := newTestRedis(t)
@@ -302,6 +315,10 @@ func TestWSUnsubscribe(t *testing.T) {
 func TestWSDeliveryNoEcho(t *testing.T) {
 	store := mocks.NewStore(t)
 	store.EXPECT().RoomExists(1).Return(true, nil).Times(2)
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil).
+		Times(2)
 	store.EXPECT().
 		CreateMessage(1, "John Doe", "hello").
 		Return(types.Message{

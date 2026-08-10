@@ -22,7 +22,16 @@ func AddMember(userID, roomID int) (types.Membership, error) {
 	err := row.Scan(&m.RoomID, &m.UserID)
 	// already a member: ON CONFLICT DO NOTHING returns no row, treat as a no-op
 	if errors.Is(err, pgx.ErrNoRows) {
-		return types.Membership{RoomID: roomID, UserID: userID}, types.ErrRoomAlreadyJoined 
+		return types.Membership{RoomID: roomID, UserID: userID}, types.ErrRoomAlreadyJoined
 	}
 	return m, err
+}
+
+// checks whether a user is a member of a given room
+func IsMember(userID, roomID int) (bool, error) {
+	var is bool
+	err := Pool.QueryRow(context.Background(),
+		`SELECT EXISTS(SELECT 1 FROM memberships WHERE room_id = $1 AND user_id = $2)`,
+		roomID, userID).Scan(&is)
+	return is, err
 }

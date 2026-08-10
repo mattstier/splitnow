@@ -366,6 +366,63 @@ func (_c *Store_GetRoomsWithName_Call) RunAndReturn(run func(string) ([]types.Ro
 	return _c
 }
 
+// IsMember provides a mock function with given fields: userID, roomID
+func (_m *Store) IsMember(userID int, roomID int) (bool, error) {
+	ret := _m.Called(userID, roomID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for IsMember")
+	}
+
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func(int, int) (bool, error)); ok {
+		return rf(userID, roomID)
+	}
+	if rf, ok := ret.Get(0).(func(int, int) bool); ok {
+		r0 = rf(userID, roomID)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	if rf, ok := ret.Get(1).(func(int, int) error); ok {
+		r1 = rf(userID, roomID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Store_IsMember_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsMember'
+type Store_IsMember_Call struct {
+	*mock.Call
+}
+
+// IsMember is a helper method to define mock.On call
+//   - userID int
+//   - roomID int
+func (_e *Store_Expecter) IsMember(userID interface{}, roomID interface{}) *Store_IsMember_Call {
+	return &Store_IsMember_Call{Call: _e.mock.On("IsMember", userID, roomID)}
+}
+
+func (_c *Store_IsMember_Call) Run(run func(userID int, roomID int)) *Store_IsMember_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int), args[1].(int))
+	})
+	return _c
+}
+
+func (_c *Store_IsMember_Call) Return(_a0 bool, _a1 error) *Store_IsMember_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *Store_IsMember_Call) RunAndReturn(run func(int, int) (bool, error)) *Store_IsMember_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // RoomExists provides a mock function with given fields: roomID
 func (_m *Store) RoomExists(roomID int) (bool, error) {
 	ret := _m.Called(roomID)

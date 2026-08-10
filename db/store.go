@@ -31,3 +31,7 @@ func (Store) GetRoomsWithName(name string) ([]types.Room, error) {
 func (Store) AddMember(userID, roomID int) (types.Membership, error) {
 	return AddMember(userID, roomID)
 }
+
+func (Store) IsMember(userID, roomID int) (bool, error) {
+	return IsMember(userID, roomID)
+}

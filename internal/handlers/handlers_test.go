@@ -271,6 +271,10 @@ func TestGetRoomStoreError(t *testing.T) {
 // test getting all the messages of an existing room
 func TestGetMessagesByRoom(t *testing.T) {
 	store := mocks.NewStore(t)
+
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil)
 	store.EXPECT().
 		GetMessagesByRoom(1).
 		Return([]types.Message{
@@ -291,7 +295,10 @@ func TestGetMessagesByRoom(t *testing.T) {
 		}, nil)
 
 	router := gin.Default()
-	router.GET("/messages", GetMessages(store))
+
+	router.GET("/messages",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		GetMessages(store))
 
 	req := httptest.NewRequest(http.MethodGet, "/messages?room=1", nil)
 	w := httptest.NewRecorder()
@@ -323,13 +330,18 @@ func TestGetMessagesByRoom(t *testing.T) {
 // test getting all the messages of a room that does not exist
 func TestGetMessagesByRoomNonexistentRoom(t *testing.T) {
 	store := mocks.NewStore(t)
+	store.EXPECT().
+		IsMember(42, 999).
+		Return(true, nil)
 	// mock no match for a nonexistent room
 	store.EXPECT().
 		GetMessagesByRoom(999).
 		Return([]types.Message{}, nil)
 
 	router := gin.Default()
-	router.GET("/messages", GetMessages(store))
+	router.GET("/messages",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		GetMessages(store))
 
 	// query a nonexistent room
 	req := httptest.NewRequest(http.MethodGet, "/messages?room=999", nil)
@@ -351,13 +363,19 @@ func TestGetMessagesByRoomNonexistentRoom(t *testing.T) {
 // test getting all the messages of a room with a failed Store
 func TestGetMessagesByRoomStoreError(t *testing.T) {
 	store := mocks.NewStore(t)
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil)
+	
 	// introduce error in db
 	store.EXPECT().
 		GetMessagesByRoom(1).
 		Return([]types.Message{}, errors.New("database unavailable"))
 
 	router := gin.Default()
-	router.GET("/messages", GetMessages(store))
+	router.GET("/messages",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		GetMessages(store))
 
 	req := httptest.NewRequest(http.MethodGet, "/messages?room=1", nil)
 	w := httptest.NewRecorder()
@@ -370,15 +388,16 @@ func TestGetMessagesByRoomStoreError(t *testing.T) {
 // test getting all the messages of a room without specifying a roomID (negative case)
 func TestGetMessagesByRoomMissingRoomID(t *testing.T) {
 	store := mocks.NewStore(t)
-
 	router := gin.Default()
-	router.GET("/messages", GetMessages(store))
+	router.GET("/messages",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		GetMessages(store))
 
 	req := httptest.NewRequest(http.MethodGet, "/messages?room=", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	// assert that it gives a 400 Bad Request 
+	// assert that it gives a 400 Bad Request
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
