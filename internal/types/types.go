@@ -26,3 +26,4 @@ type Membership struct {
 }
 
 var ErrRoomAlreadyJoined = errors.New("room already joined")
+var ErrNotAMember = errors.New("the user is not a member of this room")

@@ -21,6 +21,7 @@ type Store interface {
 	AddMember(userID, roomID int) (types.Membership, error)
 	IsMember(userID, roomID int) (bool, error)
 	GetUserRooms(userID int) ([]types.Room, error)
+	RemoveMember(userID, roomID int) (types.Membership, error)
 }
 
 func Health(c *gin.Context) {
@@ -132,6 +133,42 @@ func AddMember(s Store) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusCreated, membership)
+	}
+}
+
+func RemoveMember(s Store) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// getting the userID from the JWT directly
+		claims := c.MustGet("user").(*token.Claims)
+		roomID, err := strconv.Atoi(c.Param("room_id"))
+
+		// check that param room is a valid int
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid roomID format"})
+			return
+		}
+
+		roomExists, err := s.RoomExists(roomID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch room"})
+			return
+		}
+
+		if !roomExists {
+			c.JSON(http.StatusNotFound, gin.H{"error": "room not found"})
+			return
+		}
+
+		membership, err := s.RemoveMember(claims.UserID, roomID)
+		if err != nil {
+			if errors.Is(err, types.ErrNotAMember) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "cannot remove non-member from a room"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove member"})
+			return
+		}
+		c.JSON(http.StatusOK, membership)
 	}
 }
 

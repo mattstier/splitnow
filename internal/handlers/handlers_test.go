@@ -581,7 +581,6 @@ func TestGetUserRoomsNoResult(t *testing.T) {
 	router.GET("/rooms/mine",
 		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
 		GetUserRooms(store))
-
 	// query nonexistent room
 	req := httptest.NewRequest(http.MethodGet, "/rooms/mine", nil)
 	w := httptest.NewRecorder()

@@ -51,6 +51,9 @@ func main() {
 	r.POST("/rooms/:room_id/join",
 		handlers.RequireAuth(tm, handlers.ExtractFromHeader),
 		handlers.AddMember(store))
+	r.POST("/rooms/:room_id/leave",
+		handlers.RequireAuth(tm, handlers.ExtractFromHeader),
+		handlers.RemoveMember(store))
 
 	r.GET("/ws",
 		handlers.RequireAuth(tm, handlers.ExtractFromQuery),

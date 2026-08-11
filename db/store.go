@@ -39,3 +39,7 @@ func (Store) IsMember(userID, roomID int) (bool, error) {
 func (Store) GetUserRooms(userID int) ([]types.Room, error) {
 	return GetUserRooms(userID)
 }
+
+func (Store) RemoveMember(userID, roomID int) (types.Membership, error) {
+	return RemoveMember(userID, roomID)
+}

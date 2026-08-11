@@ -35,3 +35,19 @@ func IsMember(userID, roomID int) (bool, error) {
 		roomID, userID).Scan(&is)
 	return is, err
 }
+
+// removes a member from a room, not being a member surfaces ErrNotAMember
+func RemoveMember(userID, roomID int) (types.Membership, error) {
+	row := Pool.QueryRow(context.Background(),
+		`DELETE FROM memberships
+         WHERE room_id = $1 AND user_id = $2
+         RETURNING room_id, user_id`,
+		roomID, userID)
+
+	var m types.Membership
+	err := row.Scan(&m.RoomID, &m.UserID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return types.Membership{}, types.ErrNotAMember
+	}
+	return m, err
+}
