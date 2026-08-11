@@ -514,6 +514,133 @@ func TestAddMemberRoomExistsError(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
+//===== Tests for POST "/rooms/:room_id/leave" =====//
+
+// testing RemoveMember (positive case)
+func TestRemoveMember(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(true, nil)
+	store.EXPECT().
+		RemoveMember(42, 1).
+		Return(types.Membership{RoomID: 1, UserID: 42}, nil)
+
+	router := gin.New()
+	router.POST("/rooms/:room_id/leave",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		RemoveMember(store))
+
+	req := httptest.NewRequest(http.MethodPost, "/rooms/1/leave", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var membership types.Membership
+	err := json.Unmarshal(w.Body.Bytes(), &membership)
+	assert.NoError(t, err)
+	assert.Equal(t, types.Membership{RoomID: 1, UserID: 42}, membership)
+}
+
+// testing RemoveMember with a non-existent roomID (negative case)
+func TestRemoveMemberRoomDoesNotExist(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(999).
+		Return(false, nil)
+
+	router := gin.New()
+	router.POST("/rooms/:room_id/leave",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		RemoveMember(store))
+
+	req := httptest.NewRequest(http.MethodPost, "/rooms/999/leave", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// testing RemoveMember with an invalid roomID (negative case)
+func TestRemoveMemberInvalidRoomIDFormat(t *testing.T) {
+	store := mocks.NewStore(t)
+
+	router := gin.New()
+	router.POST("/rooms/:room_id/leave",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		RemoveMember(store))
+
+	req := httptest.NewRequest(http.MethodPost, "/rooms/foo/leave", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// testing RemoveMember when the user is not a member of the room
+func TestRemoveMemberNotAMember(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(true, nil)
+	store.EXPECT().
+		RemoveMember(42, 1).
+		Return(types.Membership{}, types.ErrNotAMember)
+
+	router := gin.New()
+	router.POST("/rooms/:room_id/leave",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		RemoveMember(store))
+
+	req := httptest.NewRequest(http.MethodPost, "/rooms/1/leave", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// testing RemoveMember with a store error in the chat service
+func TestRemoveMemberStoreError(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(true, nil)
+	store.EXPECT().
+		RemoveMember(42, 1).
+		Return(types.Membership{}, errors.New("database unavailable"))
+
+	router := gin.New()
+	router.POST("/rooms/:room_id/leave",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		RemoveMember(store))
+
+	req := httptest.NewRequest(http.MethodPost, "/rooms/1/leave", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// testing RemoveMember with a store error when fetching rooms
+func TestRemoveMemberRoomExistsError(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(false, errors.New("database unavailable"))
+
+	router := gin.New()
+	router.POST("/rooms/:room_id/leave",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		RemoveMember(store))
+
+	req := httptest.NewRequest(http.MethodPost, "/rooms/1/leave", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
 //===== Tests for GET "/rooms/mine" =====//
 
 // test for getting the rooms of a given user (positive case)
