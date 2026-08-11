@@ -513,3 +513,88 @@ func TestAddMemberRoomExistsError(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
+
+//===== Tests for GET "/rooms/mine" =====//
+
+// test for getting the rooms of a given user (positive case)
+func TestGetUserRooms(t *testing.T) {
+	store := mocks.NewStore(t)
+
+	store.EXPECT().
+		GetUserRooms(42).
+		Return([]types.Room{
+			{ID: 1, Name: "room1", CreatedBy: 42},
+			{ID: 2, Name: "room2", CreatedBy: 42}}, nil)
+
+	router := gin.New()
+	router.GET("/rooms/mine",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		GetUserRooms(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/rooms/mine", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	var rooms []types.Room
+	err := json.Unmarshal(w.Body.Bytes(), &rooms)
+	assert.NoError(t, err)
+	assert.Len(t, rooms, 2)
+
+	assert.Contains(t, rooms, types.Room{
+		ID:        1,
+		Name:      "room1",
+		CreatedBy: 42,
+	})
+	assert.Contains(t, rooms, types.Room{
+		ID:        2,
+		Name:      "room2",
+		CreatedBy: 42,
+	})
+}
+
+// test for getting the rooms of a given user during a store/db error
+func TestGetUserRoomsStoreError(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		GetUserRooms(42).
+		Return([]types.Room{}, errors.New("database unavailable"))
+
+	router := gin.New()
+	router.GET("/rooms/mine",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		GetUserRooms(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/rooms/mine", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestGetUserRoomsNoResult(t *testing.T) {
+	store := mocks.NewStore(t)
+	// mock no match for a given room 'nonexistent'
+	store.EXPECT().
+		GetUserRooms(42).
+		Return([]types.Room{}, nil)
+	router := gin.Default()
+	router.GET("/rooms/mine",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		GetUserRooms(store))
+
+	// query nonexistent room
+	req := httptest.NewRequest(http.MethodGet, "/rooms/mine", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// by design it should not give 404, just 200 and an empty list
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var rooms []types.Room
+	err := json.Unmarshal(w.Body.Bytes(), &rooms)
+	assert.NoError(t, err)
+
+	// see if the list is indeed empty
+	assert.Len(t, rooms, 0)
+	assert.Equal(t, rooms, []types.Room{})
+}
