@@ -21,7 +21,7 @@ func main() {
 		println("Failed to connect to db, reason: ", err)
 	}
 
-	// loads + parses the public PEM key only 
+	// loads + parses the public PEM key only
 	tm, err := token.New(cfg.JWTPublicKeyPath)
 	if err != nil {
 		log.Fatal(err)
@@ -45,6 +45,16 @@ func main() {
 	r.GET("/rooms",
 		handlers.RequireAuth(tm, handlers.ExtractFromHeader),
 		handlers.GetRooms(store))
+	r.GET("/rooms/mine",
+		handlers.RequireAuth(tm, handlers.ExtractFromHeader),
+		handlers.GetUserRooms(store))
+	r.POST("/rooms/:room_id/join",
+		handlers.RequireAuth(tm, handlers.ExtractFromHeader),
+		handlers.AddMember(store))
+	r.POST("/rooms/:room_id/leave",
+		handlers.RequireAuth(tm, handlers.ExtractFromHeader),
+		handlers.RemoveMember(store))
+
 	r.GET("/ws",
 		handlers.RequireAuth(tm, handlers.ExtractFromQuery),
 		handlers.WS(store, redisClient))

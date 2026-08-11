@@ -85,6 +85,10 @@ func TestWSHandshake(t *testing.T) {
 func TestWSSubscribeValidRoom(t *testing.T) {
 	store := mocks.NewStore(t)
 	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil)
+	
+	store.EXPECT().
 		RoomExists(1).
 		Return(true, nil)
 
@@ -106,6 +110,9 @@ func TestWSSendMessage(t *testing.T) {
 	store := mocks.NewStore(t)
 	store.EXPECT().
 		RoomExists(1).
+		Return(true, nil)
+	store.EXPECT().
+		IsMember(42, 1).
 		Return(true, nil)
 	store.EXPECT().
 		CreateMessage(1, "John Doe", "hello").
@@ -162,9 +169,13 @@ func TestWSSendMessageNotSubscribed(t *testing.T) {
 // TODO: notify the sender on save failure
 func TestWSSendMessageStoreError(t *testing.T) {
 	store := mocks.NewStore(t)
+
 	store.EXPECT().
 		RoomExists(1).
 		Return(true, nil) // needed for the subscribe step
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil)
 	store.EXPECT().
 		CreateMessage(1, "John Doe", "hello").
 		Return(types.Message{}, errors.New("db down"))
@@ -193,13 +204,99 @@ func TestWSSendMessageStoreError(t *testing.T) {
 	}
 }
 
+// test that a member who left the room can no longer send into it
+func TestWSSendMessageNotMember(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(true, nil)
+	// testify matches expectations in registration order, so the subscribe-time
+	// membership check (true) is registered before the send-time one (false)
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil).
+		Once() // subscribe: user is a member
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(false, nil).
+		Once() // send: membership was revoked
+
+	_, rdb := newTestRedis(t)
+	conn := setupWS(t, store, rdb)
+
+	// listen on the room's redis channel from the test side
+	sub := rdb.Subscribe(context.Background(), "room:1")
+	t.Cleanup(func() { sub.Close() })
+	ch := sub.Channel()
+
+	// must be subscribed before sending
+	err := conn.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
+	assert.NoError(t, err)
+
+	err = conn.WriteJSON(msgFrame{Type: "send", Room: 1, Content: "hello"})
+	assert.NoError(t, err)
+
+	var got errorFrame
+	err = conn.ReadJSON(&got)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "error", got.Type)
+	assert.Equal(t, 1, got.Room)
+	//assert.Equal(t, "not a member of room", got.Message)
+
+	select {
+	case msg := <-ch:
+		t.Fatalf("unexpected publish after rejected send: %s", msg.Payload)
+	case <-time.After(500 * time.Millisecond):
+		// expected: non-member send is rejected, nothing published
+	}
+}
+
+// test that a store error while checking membership on send is swallowed and nothing is published
+func TestWSSendMessageIsMemberStoreError(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(true, nil)
+	// registration order again: subscribe-time true before send-time error
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil).
+		Once() // subscribe: ok
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(false, errors.New("db down")).
+		Once() // send: membership check fails
+
+	_, rdb := newTestRedis(t)
+	conn := setupWS(t, store, rdb)
+
+	// listen on the room's redis channel from the test side
+	sub := rdb.Subscribe(context.Background(), "room:1")
+	t.Cleanup(func() { sub.Close() })
+	ch := sub.Channel()
+
+	// must be subscribed before sending
+	err := conn.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
+	assert.NoError(t, err)
+
+	err = conn.WriteJSON(msgFrame{Type: "send", Room: 1, Content: "hello"})
+	assert.NoError(t, err)
+
+	select {
+	case msg := <-ch:
+		t.Fatalf("unexpected publish after failed membership check: %s", msg.Payload)
+	case <-time.After(500 * time.Millisecond):
+		// expected: store error is swallowed, nothing published
+	}
+}
+
 // test that subscribing to a nonexistent room returns an error frame
 func TestWSSubscribeNonexistentRoom(t *testing.T) {
 	store := mocks.NewStore(t)
 	store.EXPECT().
 		RoomExists(999).
 		Return(false, nil)
-
 	_, rdb := newTestRedis(t)
 	conn := setupWS(t, store, rdb)
 
@@ -237,6 +334,62 @@ func TestWSSubscribeStoreError(t *testing.T) {
 	}
 
 	// store error was swallowed: no subscription opened (deterministic postcondition)
+	assert.Equal(t, 0, mr.PubSubNumSub("room:1")["room:1"])
+}
+
+// test that subscribing to a room the user is not a member of is rejected
+func TestWSSubscribeNotMember(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(true, nil)
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(false, nil)
+
+	mr, rdb := newTestRedis(t)
+	conn := setupWS(t, store, rdb)
+
+	err := conn.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
+	assert.NoError(t, err)
+
+	var got errorFrame
+	err = conn.ReadJSON(&got)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "error", got.Type)
+	assert.Equal(t, 1, got.Room)
+	//assert.Equal(t, "not a member of room", got.Message)
+
+	// rejected: no redis subscription may open
+	assert.Equal(t, 0, mr.PubSubNumSub("room:1")["room:1"])
+}
+
+// test that a store error while checking membership is swallowed and no subscription opens
+func TestWSSubscribeIsMemberStoreError(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(true, nil)
+	membershipChecked := make(chan struct{}, 1)
+	store.EXPECT().
+		IsMember(42, 1).
+		Run(func(int, int) { membershipChecked <- struct{}{} }).
+		Return(false, errors.New("db down"))
+
+	mr, rdb := newTestRedis(t)
+	conn := setupWS(t, store, rdb)
+
+	conn.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
+
+	select {
+	case <-membershipChecked:
+		// handler called IsMember, hit the error, and returned without subscribing
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for IsMember call")
+	}
+
+	// store error was swallowed: no subscription opened
 	assert.Equal(t, 0, mr.PubSubNumSub("room:1")["room:1"])
 }
 
@@ -280,6 +433,9 @@ func TestWSUnknownFrameType(t *testing.T) {
 
 func TestWSUnsubscribe(t *testing.T) {
 	store := mocks.NewStore(t)
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil)
 	store.EXPECT().RoomExists(1).Return(true, nil) // needed for the subscribe step
 
 	mr, rdb := newTestRedis(t)
@@ -302,6 +458,10 @@ func TestWSUnsubscribe(t *testing.T) {
 func TestWSDeliveryNoEcho(t *testing.T) {
 	store := mocks.NewStore(t)
 	store.EXPECT().RoomExists(1).Return(true, nil).Times(2)
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil).
+		Times(3)
 	store.EXPECT().
 		CreateMessage(1, "John Doe", "hello").
 		Return(types.Message{

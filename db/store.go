@@ -27,3 +27,19 @@ func (Store) GetAllRooms() ([]types.Room, error) {
 func (Store) GetRoomsWithName(name string) ([]types.Room, error) {
 	return GetRoomsWithName(name)
 }
+
+func (Store) AddMember(userID, roomID int) (types.Membership, error) {
+	return AddMember(userID, roomID)
+}
+
+func (Store) IsMember(userID, roomID int) (bool, error) {
+	return IsMember(userID, roomID)
+}
+
+func (Store) GetUserRooms(userID int) ([]types.Room, error) {
+	return GetUserRooms(userID)
+}
+
+func (Store) RemoveMember(userID, roomID int) (types.Membership, error) {
+	return RemoveMember(userID, roomID)
+}

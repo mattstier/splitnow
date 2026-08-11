@@ -21,6 +21,63 @@ func (_m *Store) EXPECT() *Store_Expecter {
 	return &Store_Expecter{mock: &_m.Mock}
 }
 
+// AddMember provides a mock function with given fields: userID, roomID
+func (_m *Store) AddMember(userID int, roomID int) (types.Membership, error) {
+	ret := _m.Called(userID, roomID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AddMember")
+	}
+
+	var r0 types.Membership
+	var r1 error
+	if rf, ok := ret.Get(0).(func(int, int) (types.Membership, error)); ok {
+		return rf(userID, roomID)
+	}
+	if rf, ok := ret.Get(0).(func(int, int) types.Membership); ok {
+		r0 = rf(userID, roomID)
+	} else {
+		r0 = ret.Get(0).(types.Membership)
+	}
+
+	if rf, ok := ret.Get(1).(func(int, int) error); ok {
+		r1 = rf(userID, roomID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Store_AddMember_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AddMember'
+type Store_AddMember_Call struct {
+	*mock.Call
+}
+
+// AddMember is a helper method to define mock.On call
+//   - userID int
+//   - roomID int
+func (_e *Store_Expecter) AddMember(userID interface{}, roomID interface{}) *Store_AddMember_Call {
+	return &Store_AddMember_Call{Call: _e.mock.On("AddMember", userID, roomID)}
+}
+
+func (_c *Store_AddMember_Call) Run(run func(userID int, roomID int)) *Store_AddMember_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int), args[1].(int))
+	})
+	return _c
+}
+
+func (_c *Store_AddMember_Call) Return(_a0 types.Membership, _a1 error) *Store_AddMember_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *Store_AddMember_Call) RunAndReturn(run func(int, int) (types.Membership, error)) *Store_AddMember_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateMessage provides a mock function with given fields: roomID, sender, content
 func (_m *Store) CreateMessage(roomID int, sender string, content string) (types.Message, error) {
 	ret := _m.Called(roomID, sender, content)
@@ -305,6 +362,178 @@ func (_c *Store_GetRoomsWithName_Call) Return(_a0 []types.Room, _a1 error) *Stor
 }
 
 func (_c *Store_GetRoomsWithName_Call) RunAndReturn(run func(string) ([]types.Room, error)) *Store_GetRoomsWithName_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetUserRooms provides a mock function with given fields: userID
+func (_m *Store) GetUserRooms(userID int) ([]types.Room, error) {
+	ret := _m.Called(userID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetUserRooms")
+	}
+
+	var r0 []types.Room
+	var r1 error
+	if rf, ok := ret.Get(0).(func(int) ([]types.Room, error)); ok {
+		return rf(userID)
+	}
+	if rf, ok := ret.Get(0).(func(int) []types.Room); ok {
+		r0 = rf(userID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]types.Room)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(int) error); ok {
+		r1 = rf(userID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Store_GetUserRooms_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetUserRooms'
+type Store_GetUserRooms_Call struct {
+	*mock.Call
+}
+
+// GetUserRooms is a helper method to define mock.On call
+//   - userID int
+func (_e *Store_Expecter) GetUserRooms(userID interface{}) *Store_GetUserRooms_Call {
+	return &Store_GetUserRooms_Call{Call: _e.mock.On("GetUserRooms", userID)}
+}
+
+func (_c *Store_GetUserRooms_Call) Run(run func(userID int)) *Store_GetUserRooms_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int))
+	})
+	return _c
+}
+
+func (_c *Store_GetUserRooms_Call) Return(_a0 []types.Room, _a1 error) *Store_GetUserRooms_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *Store_GetUserRooms_Call) RunAndReturn(run func(int) ([]types.Room, error)) *Store_GetUserRooms_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// IsMember provides a mock function with given fields: userID, roomID
+func (_m *Store) IsMember(userID int, roomID int) (bool, error) {
+	ret := _m.Called(userID, roomID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for IsMember")
+	}
+
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func(int, int) (bool, error)); ok {
+		return rf(userID, roomID)
+	}
+	if rf, ok := ret.Get(0).(func(int, int) bool); ok {
+		r0 = rf(userID, roomID)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	if rf, ok := ret.Get(1).(func(int, int) error); ok {
+		r1 = rf(userID, roomID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Store_IsMember_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsMember'
+type Store_IsMember_Call struct {
+	*mock.Call
+}
+
+// IsMember is a helper method to define mock.On call
+//   - userID int
+//   - roomID int
+func (_e *Store_Expecter) IsMember(userID interface{}, roomID interface{}) *Store_IsMember_Call {
+	return &Store_IsMember_Call{Call: _e.mock.On("IsMember", userID, roomID)}
+}
+
+func (_c *Store_IsMember_Call) Run(run func(userID int, roomID int)) *Store_IsMember_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int), args[1].(int))
+	})
+	return _c
+}
+
+func (_c *Store_IsMember_Call) Return(_a0 bool, _a1 error) *Store_IsMember_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *Store_IsMember_Call) RunAndReturn(run func(int, int) (bool, error)) *Store_IsMember_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RemoveMember provides a mock function with given fields: userID, roomID
+func (_m *Store) RemoveMember(userID int, roomID int) (types.Membership, error) {
+	ret := _m.Called(userID, roomID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RemoveMember")
+	}
+
+	var r0 types.Membership
+	var r1 error
+	if rf, ok := ret.Get(0).(func(int, int) (types.Membership, error)); ok {
+		return rf(userID, roomID)
+	}
+	if rf, ok := ret.Get(0).(func(int, int) types.Membership); ok {
+		r0 = rf(userID, roomID)
+	} else {
+		r0 = ret.Get(0).(types.Membership)
+	}
+
+	if rf, ok := ret.Get(1).(func(int, int) error); ok {
+		r1 = rf(userID, roomID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Store_RemoveMember_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RemoveMember'
+type Store_RemoveMember_Call struct {
+	*mock.Call
+}
+
+// RemoveMember is a helper method to define mock.On call
+//   - userID int
+//   - roomID int
+func (_e *Store_Expecter) RemoveMember(userID interface{}, roomID interface{}) *Store_RemoveMember_Call {
+	return &Store_RemoveMember_Call{Call: _e.mock.On("RemoveMember", userID, roomID)}
+}
+
+func (_c *Store_RemoveMember_Call) Run(run func(userID int, roomID int)) *Store_RemoveMember_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int), args[1].(int))
+	})
+	return _c
+}
+
+func (_c *Store_RemoveMember_Call) Return(_a0 types.Membership, _a1 error) *Store_RemoveMember_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *Store_RemoveMember_Call) RunAndReturn(run func(int, int) (types.Membership, error)) *Store_RemoveMember_Call {
 	_c.Call.Return(run)
 	return _c
 }

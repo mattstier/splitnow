@@ -14,6 +14,7 @@ function App() {
   const [loginError, setLoginError] = useState('')
   const [room, setRoom] = useState(null)
   const [rooms, setRooms] = useState([])
+  const [myRooms, setMyRooms] = useState([])
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [newRoomName, setNewRoomName] = useState('')
@@ -69,19 +70,58 @@ function App() {
 
   const submit = mode === 'login' ? login : register
 
+  // opens a room and clears the previous room's messages so they never leak in
+  const openRoom = (r) => {
+    setMessages([])
+    setRoom(r)
+  }
+
   // registers a new room and joins it
   const createRoom = () => {
     if (!newRoomName.trim()) return
     authedFetch('/rooms', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newRoomName, created_by: 1 })
+      body: JSON.stringify({ name: newRoomName })
     })
       .then(res => { if (!res.ok) return; return res.json() })
       .then(r => {
         if (!r) return
         setRooms(prev => [...prev, r])
-        setRoom({ id: r.id, name: r.name })
+        // the creator is auto-added as a member on the backend
+        setMyRooms(prev => [...prev, r])
+        openRoom({ id: r.id, name: r.name })
+      })
+  }
+
+  // joins a public room and opens it
+  const joinRoom = (id) => {
+    authedFetch(`/rooms/${id}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+      .then(res => {
+        if (!res.ok && res.status !== 409) return // 409 = already a member
+        const joined = rooms.find(r => r.id === id)
+        if (joined) {
+          setMyRooms(prev => [...prev, joined])
+          openRoom({ id: joined.id, name: joined.name })
+        }
+      })
+  }
+
+  // leaves the current room and returns to the picker
+  const leaveRoom = () => {
+    if (!room) return
+    authedFetch(`/rooms/${room.id}/leave`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+      .then(res => {
+        if (!res.ok) return
+        setMyRooms(prev => prev.filter(r => r.id !== room.id))
+        setMessages([])
+        setRoom(null)
       })
   }
 
@@ -91,6 +131,9 @@ function App() {
     authedFetch('/rooms')
       .then(res => res.json())
       .then(setRooms)
+    authedFetch('/rooms/mine')
+      .then(res => res.json())
+      .then(setMyRooms)
   }, [token])
 
   // runs when joining a room, opens a websocket
@@ -99,10 +142,14 @@ function App() {
 
     // get all messages of the given room before opening the socket
     authedFetch('/messages?room=' + room.id)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error('failed to load messages')
+        return res.json()
+      })
       .then(history => {
-      setMessages(history.map(m => ({ text: m.content, sender: m.sender, created_at: m.created_at, mine: false })))
-    })
+        setMessages(history.map(m => ({ text: m.content, sender: m.sender, created_at: m.created_at, mine: false })))
+      })
+      .catch(() => setMessages([]))
 
     const ws = new WebSocket('ws://localhost:5173/ws?token=' + token)
     ws.onopen = () => ws.send(JSON.stringify({ type: 'subscribe', room: room.id }))
@@ -177,6 +224,8 @@ function App() {
 
   // room picker view
   if (!room) {
+    const myRoomIds = new Set(myRooms.map(r => r.id))
+    const publicRooms = rooms.filter(r => !myRoomIds.has(r.id))
     return (
       <div className="flex flex-col h-screen bg-zinc-900 text-white">
         <div className="border-b border-zinc-700 p-4">
@@ -199,17 +248,39 @@ function App() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {rooms.length === 0 && <p className="text-zinc-500">no rooms yet</p>}
-          {rooms.map(r => (
-            <button
-              key={r.id}
-              onClick={() => setRoom({ id: r.id, name: r.name })}
-              className="w-full text-left bg-zinc-800 hover:bg-zinc-700 rounded-lg px-4 py-2 font-medium cursor-pointer"
-            >
-              {r.name}
-            </button>
-          ))}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div>
+            <h2 className="text-sm font-medium text-zinc-400 mb-2">My rooms</h2>
+            {myRooms.length === 0 && <p className="text-zinc-500">you have not joined any rooms yet</p>}
+            {myRooms.map(r => (
+              <button
+                key={r.id}
+                onClick={() => openRoom({ id: r.id, name: r.name })}
+                className="w-full text-left bg-zinc-800 hover:bg-zinc-700 rounded-lg px-4 py-2 font-medium cursor-pointer mb-2"
+              >
+                {r.name}
+              </button>
+            ))}
+          </div>
+
+          <div>
+            <h2 className="text-sm font-medium text-zinc-400 mb-2">All rooms</h2>
+            {publicRooms.length === 0 && <p className="text-zinc-500">no other rooms</p>}
+            {publicRooms.map(r => (
+              <div
+                key={r.id}
+                className="w-full flex items-center justify-between bg-zinc-800 rounded-lg px-4 py-2 mb-2"
+              >
+                <span className="font-medium">{r.name}</span>
+                <button
+                  onClick={() => joinRoom(r.id)}
+                  className="bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-1 text-sm font-medium cursor-pointer"
+                >
+                  Join
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     )
@@ -220,12 +291,18 @@ function App() {
     <div className="flex flex-col h-screen bg-zinc-900 text-white">
       <div className="border-b border-zinc-700 p-4 flex items-center gap-3">
         <button
-          onClick={() => setRoom(null)}
+          onClick={() => { setMessages([]); setRoom(null) }}
           className="bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 py-1 text-sm cursor-pointer"
         >
           ← Back
         </button>
         <h1 className="text-lg font-semibold">Room: {room.name}</h1>
+        <button
+          onClick={leaveRoom}
+          className="ml-auto bg-zinc-800 hover:bg-red-700 rounded-lg px-3 py-1 text-sm cursor-pointer"
+        >
+          Leave
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
