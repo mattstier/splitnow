@@ -318,7 +318,7 @@ func TestWSDeliveryNoEcho(t *testing.T) {
 	store.EXPECT().
 		IsMember(42, 1).
 		Return(true, nil).
-		Times(2)
+		Times(3)
 	store.EXPECT().
 		CreateMessage(1, "John Doe", "hello").
 		Return(types.Message{

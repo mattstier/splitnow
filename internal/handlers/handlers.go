@@ -136,6 +136,9 @@ func AddMember(s Store) gin.HandlerFunc {
 	}
 }
 
+// NOTE: leaving a room only deletes the membership row. A live websocket stays
+// subscribed and keeps receiving messages until the client sends an
+// "unsubscribe" frame or disconnects, which is currently handled by the frontend. 
 func RemoveMember(s Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// getting the userID from the JWT directly

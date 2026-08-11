@@ -170,6 +170,18 @@ func (ws wsDeps) handleSendMessage(client *wsClient, frame msgFrame) {
 		client.conn.WriteMessage(websocket.TextMessage, data)
 		return
 	}
+	// a member may have left the room while the socket stayed subscribed
+	// therefore we have to check membership each time a message is sent
+	isMember, err := ws.store.IsMember(client.userID, frame.Room)
+	if err != nil {
+		println("failed to check membership:", err)
+		return
+	}
+	if !isMember {
+		data, _ := json.Marshal(errorFrame{Type: "error", Room: frame.Room, Message: "not a member of room"})
+		client.conn.WriteMessage(websocket.TextMessage, data)
+		return
+	}
 	saved, err := ws.store.CreateMessage(frame.Room, client.username, frame.Content)
 	if err != nil {
 		println("failed to save message:", err)
