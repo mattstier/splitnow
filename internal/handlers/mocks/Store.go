@@ -308,9 +308,9 @@ func (_c *Store_GetAllRooms_Call) RunAndReturn(run func() ([]types.Room, error))
 	return _c
 }
 
-// GetMessagesByRoom provides a mock function with given fields: roomID
-func (_m *Store) GetMessagesByRoom(roomID int) ([]types.Message, error) {
-	ret := _m.Called(roomID)
+// GetMessagesByRoom provides a mock function with given fields: roomID, messageID, limit
+func (_m *Store) GetMessagesByRoom(roomID int, messageID int, limit int) ([]types.Message, error) {
+	ret := _m.Called(roomID, messageID, limit)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetMessagesByRoom")
@@ -318,19 +318,19 @@ func (_m *Store) GetMessagesByRoom(roomID int) ([]types.Message, error) {
 
 	var r0 []types.Message
 	var r1 error
-	if rf, ok := ret.Get(0).(func(int) ([]types.Message, error)); ok {
-		return rf(roomID)
+	if rf, ok := ret.Get(0).(func(int, int, int) ([]types.Message, error)); ok {
+		return rf(roomID, messageID, limit)
 	}
-	if rf, ok := ret.Get(0).(func(int) []types.Message); ok {
-		r0 = rf(roomID)
+	if rf, ok := ret.Get(0).(func(int, int, int) []types.Message); ok {
+		r0 = rf(roomID, messageID, limit)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]types.Message)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(int) error); ok {
-		r1 = rf(roomID)
+	if rf, ok := ret.Get(1).(func(int, int, int) error); ok {
+		r1 = rf(roomID, messageID, limit)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -345,13 +345,15 @@ type Store_GetMessagesByRoom_Call struct {
 
 // GetMessagesByRoom is a helper method to define mock.On call
 //   - roomID int
-func (_e *Store_Expecter) GetMessagesByRoom(roomID interface{}) *Store_GetMessagesByRoom_Call {
-	return &Store_GetMessagesByRoom_Call{Call: _e.mock.On("GetMessagesByRoom", roomID)}
+//   - messageID int
+//   - limit int
+func (_e *Store_Expecter) GetMessagesByRoom(roomID interface{}, messageID interface{}, limit interface{}) *Store_GetMessagesByRoom_Call {
+	return &Store_GetMessagesByRoom_Call{Call: _e.mock.On("GetMessagesByRoom", roomID, messageID, limit)}
 }
 
-func (_c *Store_GetMessagesByRoom_Call) Run(run func(roomID int)) *Store_GetMessagesByRoom_Call {
+func (_c *Store_GetMessagesByRoom_Call) Run(run func(roomID int, messageID int, limit int)) *Store_GetMessagesByRoom_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(int))
+		run(args[0].(int), args[1].(int), args[2].(int))
 	})
 	return _c
 }
@@ -361,7 +363,7 @@ func (_c *Store_GetMessagesByRoom_Call) Return(_a0 []types.Message, _a1 error) *
 	return _c
 }
 
-func (_c *Store_GetMessagesByRoom_Call) RunAndReturn(run func(int) ([]types.Message, error)) *Store_GetMessagesByRoom_Call {
+func (_c *Store_GetMessagesByRoom_Call) RunAndReturn(run func(int, int, int) ([]types.Message, error)) *Store_GetMessagesByRoom_Call {
 	_c.Call.Return(run)
 	return _c
 }

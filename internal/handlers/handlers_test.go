@@ -245,7 +245,7 @@ func TestGetMessagesByRoom(t *testing.T) {
 		IsMember(42, 1).
 		Return(true, nil)
 	store.EXPECT().
-		GetMessagesByRoom(1).
+		GetMessagesByRoom(1, 0, 50).
 		Return([]types.Message{
 			{
 				ID:        1,
@@ -269,7 +269,7 @@ func TestGetMessagesByRoom(t *testing.T) {
 		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
 		GetMessages(store))
 
-	req := httptest.NewRequest(http.MethodGet, "/messages?room=1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/messages?room=1&before=0&limit=50", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -304,7 +304,7 @@ func TestGetMessagesByRoomNonexistentRoom(t *testing.T) {
 		Return(true, nil)
 	// mock no match for a nonexistent room
 	store.EXPECT().
-		GetMessagesByRoom(999).
+		GetMessagesByRoom(999, 0, 50).
 		Return([]types.Message{}, nil)
 
 	router := gin.Default()
@@ -313,7 +313,7 @@ func TestGetMessagesByRoomNonexistentRoom(t *testing.T) {
 		GetMessages(store))
 
 	// query a nonexistent room
-	req := httptest.NewRequest(http.MethodGet, "/messages?room=999", nil)
+	req := httptest.NewRequest(http.MethodGet, "/messages?room=999&before=0&limit=50", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -338,7 +338,7 @@ func TestGetMessagesByRoomStoreError(t *testing.T) {
 
 	// introduce error in db
 	store.EXPECT().
-		GetMessagesByRoom(1).
+		GetMessagesByRoom(1, 0, 50).
 		Return([]types.Message{}, errors.New("database unavailable"))
 
 	router := gin.Default()
@@ -346,7 +346,7 @@ func TestGetMessagesByRoomStoreError(t *testing.T) {
 		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
 		GetMessages(store))
 
-	req := httptest.NewRequest(http.MethodGet, "/messages?room=1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/messages?room=1&before=0&limit=50", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 

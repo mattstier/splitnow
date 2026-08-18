@@ -13,7 +13,7 @@ import (
 
 type Store interface {
 	CreateMessage(roomID int, sender, content string) (types.Message, error)
-	GetMessagesByRoom(roomID int) ([]types.Message, error)
+	GetMessagesByRoom(roomID, messageID, limit int) ([]types.Message, error)
 	DeleteMessage(messageID, roomID int, sender string) (types.Message, error)
 	CreateRoom(name string, creator int) (types.Room, error)
 	GetAllRooms() ([]types.Room, error)
@@ -33,8 +33,10 @@ func Health(c *gin.Context) {
 func GetMessages(s Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roomID, err := strconv.Atoi(c.Query("room"))
+		messageID, err := strconv.Atoi(c.Query("before"))
+		limit, err := strconv.Atoi(c.Query("limit"))
 		if err != nil {
-			c.JSON(400, gin.H{"error": "roomID required"})
+			c.JSON(400, gin.H{"error": "invalid query"})
 			return
 		}
 
@@ -48,7 +50,7 @@ func GetMessages(s Store) gin.HandlerFunc {
 			return
 		}
 
-		messages, err := s.GetMessagesByRoom(roomID)
+		messages, err := s.GetMessagesByRoom(roomID, messageID, limit)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "failed to fetch messages"})
 			return
@@ -139,7 +141,7 @@ func AddMember(s Store) gin.HandlerFunc {
 
 // NOTE: leaving a room only deletes the membership row. A live websocket stays
 // subscribed and keeps receiving messages until the client sends an
-// "unsubscribe" frame or disconnects, which is currently handled by the frontend. 
+// "unsubscribe" frame or disconnects, which is currently handled by the frontend.
 func RemoveMember(s Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// getting the userID from the JWT directly

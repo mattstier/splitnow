@@ -21,10 +21,14 @@ func CreateMessage(roomID int, sender, content string) (types.Message, error) {
 	return m, err
 }
 
-func GetMessagesByRoom(roomID int) ([]types.Message, error) {
+func GetMessagesByRoom(roomID, messageID, limit int) ([]types.Message, error) {
 	rows, err := Pool.Query(context.Background(),
 		`SELECT id, room_id, sender, content, deleted, created_at
-         FROM messages WHERE room_id = $1 ORDER BY created_at`, roomID)
+         FROM messages 
+		 WHERE room_id = $1 AND ($2 = 0 OR id < $2)
+		 ORDER BY id DESC
+		 LIMIT $3`, roomID, messageID, limit)
+
 	if err != nil {
 		return nil, err
 	}
