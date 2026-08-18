@@ -25,6 +25,11 @@ type Store interface {
 	RemoveMember(userID, roomID int) (types.Membership, error)
 }
 
+const (
+	defaultPageSize = 15
+	defaultCursorID = 0 // needs to be 0, sentinel: "$2 = 0" in db/messages.go 
+)
+
 func Health(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "ok"})
 }
@@ -33,13 +38,28 @@ func Health(c *gin.Context) {
 func GetMessages(s Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roomID, err := strconv.Atoi(c.Query("room"))
-		messageID, err := strconv.Atoi(c.Query("before"))
-		limit, err := strconv.Atoi(c.Query("limit"))
 		if err != nil {
 			c.JSON(400, gin.H{"error": "invalid query"})
 			return
 		}
 
+		messageID := defaultCursorID
+		if v := c.Query("before"); v != "" {
+			messageID, err = strconv.Atoi(v)
+			if err != nil {
+				c.JSON(400, gin.H{"error": "invalid query"})
+				return
+			}
+		}
+
+		limit := defaultPageSize
+		if v := c.Query("limit"); v != "" {
+			limit, err = strconv.Atoi(v)
+			if err != nil {
+				c.JSON(400, gin.H{"error": "invalid query"})
+				return
+			}
+		}
 		// get UID from the JWT, check if its a member
 		claims := c.MustGet("user").(*token.Claims)
 		isMember, err := s.IsMember(claims.UserID, roomID)
