@@ -20,6 +20,15 @@ function App() {
   const [newRoomName, setNewRoomName] = useState('')
   const wsRef = useRef(null)
 
+  // own username, decoded from the JWT, used to flag own messages in history
+  const myUsername = (() => {
+    try {
+      return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).username
+    } catch {
+      return ''
+    }
+  })()
+
   // makes a fetch with the token attached, and logs out on 401
   const authedFetch = (url, opts = {}) =>
     fetch(url, {
@@ -147,7 +156,7 @@ function App() {
         return res.json()
       })
       .then(history => {
-        setMessages(history.map(m => ({ text: m.content, sender: m.sender, created_at: m.created_at, mine: false })))
+        setMessages(history.map(m => ({ id: m.id, deleted: m.deleted, text: m.content, sender: m.sender, created_at: m.created_at, mine: m.sender === myUsername })))
       })
       .catch(() => setMessages([]))
 
@@ -156,8 +165,13 @@ function App() {
     // here we define the message format with a flag 'mine' to handle own messages
     ws.onmessage = (e) => {
       const d = JSON.parse(e.data)
+      // server-confirmed deletion: replace the message in place, keeping order
+      if (d.deleted) {
+        setMessages(prev => prev.map(m => m.id === d.id ? { ...m, deleted: true, text: '' } : m))
+        return
+      }
       if (d.content === undefined) return
-      setMessages((prev) => [...prev, { text: d.content, sender: d.sender, created_at: d.created_at, mine: false }])
+      setMessages((prev) => [...prev, { id: d.id, deleted: false, text: d.content, sender: d.sender, created_at: d.created_at, mine: false }])
     }
     wsRef.current = ws
     return () => ws.close()
@@ -172,6 +186,11 @@ function App() {
       // clearing text box
       setInput('')
     }
+  }
+
+  // deletes a message; the confirmed update arrives via the ws broadcast
+  const deleteMessage = (id) => {
+    wsRef.current.send(JSON.stringify({ type: 'delete', room: room.id, message: id }))
   }
 
   // room picker view
@@ -312,11 +331,19 @@ function App() {
               <div className={`text-xs text-zinc-500 mb-1 ${m.mine ? 'text-right' : 'text-left'}`}>
                 {m.sender} · {formatTime(m.created_at)}
               </div>
-              <div className={`rounded-lg px-4 py-2 ${m.mine ? 'bg-blue-600' : 'bg-zinc-800'}`}>
-                {m.text}
+<div className={`rounded-lg px-4 py-2 ${m.mine ? 'bg-blue-600' : 'bg-zinc-800'}`}>
+                {m.deleted ? <span className="italic text-zinc-200">**message deleted**</span> : m.text}
               </div>
             </div>
-          </div>
+            {m.mine && m.id != null && !m.deleted && (
+              <button
+                onClick={() => deleteMessage(m.id)}
+                className="self-start text-xs text-zinc-500 hover:text-red-400 cursor-pointer"
+              >
+                delete
+              </button>
+            )}
+         </div>
         ))}
       </div>
 
