@@ -14,6 +14,7 @@ import (
 type Store interface {
 	CreateMessage(roomID int, sender, content string) (types.Message, error)
 	GetMessagesByRoom(roomID int) ([]types.Message, error)
+	DeleteMessage(messageID, roomID int) (types.Message, error)
 	CreateRoom(name string, creator int) (types.Room, error)
 	GetAllRooms() ([]types.Room, error)
 	GetRoomsWithName(name string) ([]types.Room, error)
