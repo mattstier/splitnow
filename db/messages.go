@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 
@@ -30,7 +31,7 @@ func GetMessagesByRoom(roomID int) ([]types.Message, error) {
 	return pgx.CollectRows(rows, pgx.RowToStructByName[types.Message])
 }
 
-// messages are deleted primarily by their own id, however roomID is required for authorization 
+// messages are deleted primarily by their own id, however roomID is required for authorization
 func DeleteMessage(messageID, roomID int) (types.Message, error) {
 	//NOTE: messages are not physically deleted, only marked as deleted and scrubbed of their content
 	row := Pool.QueryRow(context.Background(),
@@ -42,5 +43,8 @@ func DeleteMessage(messageID, roomID int) (types.Message, error) {
 
 	var m types.Message
 	err := row.Scan(&m.ID, &m.RoomID, &m.Sender, &m.Content, &m.Deleted, &m.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return types.Message{}, types.ErrMessageNotFound
+	}
 	return m, err
 }

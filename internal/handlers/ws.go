@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -222,6 +223,11 @@ func (ws wsDeps) handleDeleteMessage(client *wsClient, frame deleteFrame) {
 	}
 	msg, err := ws.store.DeleteMessage(frame.Message, frame.Room)
 	if err != nil {
+		if errors.Is(err, types.ErrMessageNotFound) {
+			data, _ := json.Marshal(errorFrame{Type: "error", Room: frame.Room, Message: "message not found"})
+			client.conn.WriteMessage(websocket.TextMessage, data)
+			return
+		}
 		println("failed to delete message:", err)
 		return
 	}
