@@ -31,15 +31,16 @@ func GetMessagesByRoom(roomID int) ([]types.Message, error) {
 	return pgx.CollectRows(rows, pgx.RowToStructByName[types.Message])
 }
 
-// messages are deleted primarily by their own id, however roomID is required for authorization
-func DeleteMessage(messageID, roomID int) (types.Message, error) {
+// messages are deleted primarily by their own id, however roomID is required
+// for authorization and sender to ensure only the owner can delete the message
+func DeleteMessage(messageID, roomID int, sender string) (types.Message, error) {
 	//NOTE: messages are not physically deleted, only marked as deleted and scrubbed of their content
 	row := Pool.QueryRow(context.Background(),
 		`UPDATE messages
 		 SET deleted = TRUE, content = ''
-		 WHERE id = $1 and room_id = $2 
+		 WHERE id = $1 and room_id = $2 and sender = $3
          RETURNING id, room_id, sender, content, deleted, created_at`,
-		messageID, roomID)
+		messageID, roomID, sender)
 
 	var m types.Message
 	err := row.Scan(&m.ID, &m.RoomID, &m.Sender, &m.Content, &m.Deleted, &m.CreatedAt)

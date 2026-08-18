@@ -558,7 +558,7 @@ func TestWSDeleteMessageNotFound(t *testing.T) {
 		IsMember(42, 1).
 		Return(true, nil)
 	store.EXPECT().
-		DeleteMessage(5, 1).
+		DeleteMessage(5, 1, "John Doe").
 		Return(types.Message{}, types.ErrMessageNotFound)
 
 	_, rdb := newTestRedis(t)
@@ -588,7 +588,7 @@ func TestWSDeleteMessage(t *testing.T) {
 		Return(true, nil).
 		Times(3)
 	store.EXPECT().
-		DeleteMessage(5, 1).
+		DeleteMessage(5, 1, "John Doe").
 		Return(types.Message{
 			ID:        5,
 			RoomID:    1,
@@ -633,7 +633,7 @@ func TestWSDeleteMessageStoreError(t *testing.T) {
 		IsMember(42, 1).
 		Return(true, nil)
 	store.EXPECT().
-		DeleteMessage(5, 1).
+		DeleteMessage(5, 1, "John Doe").
 		Return(types.Message{}, errors.New("db down"))
 
 	_, rdb := newTestRedis(t)

@@ -221,7 +221,7 @@ func (ws wsDeps) handleDeleteMessage(client *wsClient, frame deleteFrame) {
 		client.conn.WriteMessage(websocket.TextMessage, data)
 		return
 	}
-	msg, err := ws.store.DeleteMessage(frame.Message, frame.Room)
+	msg, err := ws.store.DeleteMessage(frame.Message, frame.Room, client.username)
 	if err != nil {
 		if errors.Is(err, types.ErrMessageNotFound) {
 			data, _ := json.Marshal(errorFrame{Type: "error", Room: frame.Room, Message: "message not found"})

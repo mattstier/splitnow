@@ -193,9 +193,9 @@ func (_c *Store_CreateRoom_Call) RunAndReturn(run func(string, int) (types.Room,
 	return _c
 }
 
-// DeleteMessage provides a mock function with given fields: messageID, roomID
-func (_m *Store) DeleteMessage(messageID int, roomID int) (types.Message, error) {
-	ret := _m.Called(messageID, roomID)
+// DeleteMessage provides a mock function with given fields: messageID, roomID, sender
+func (_m *Store) DeleteMessage(messageID int, roomID int, sender string) (types.Message, error) {
+	ret := _m.Called(messageID, roomID, sender)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteMessage")
@@ -203,17 +203,17 @@ func (_m *Store) DeleteMessage(messageID int, roomID int) (types.Message, error)
 
 	var r0 types.Message
 	var r1 error
-	if rf, ok := ret.Get(0).(func(int, int) (types.Message, error)); ok {
-		return rf(messageID, roomID)
+	if rf, ok := ret.Get(0).(func(int, int, string) (types.Message, error)); ok {
+		return rf(messageID, roomID, sender)
 	}
-	if rf, ok := ret.Get(0).(func(int, int) types.Message); ok {
-		r0 = rf(messageID, roomID)
+	if rf, ok := ret.Get(0).(func(int, int, string) types.Message); ok {
+		r0 = rf(messageID, roomID, sender)
 	} else {
 		r0 = ret.Get(0).(types.Message)
 	}
 
-	if rf, ok := ret.Get(1).(func(int, int) error); ok {
-		r1 = rf(messageID, roomID)
+	if rf, ok := ret.Get(1).(func(int, int, string) error); ok {
+		r1 = rf(messageID, roomID, sender)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -229,13 +229,14 @@ type Store_DeleteMessage_Call struct {
 // DeleteMessage is a helper method to define mock.On call
 //   - messageID int
 //   - roomID int
-func (_e *Store_Expecter) DeleteMessage(messageID interface{}, roomID interface{}) *Store_DeleteMessage_Call {
-	return &Store_DeleteMessage_Call{Call: _e.mock.On("DeleteMessage", messageID, roomID)}
+//   - sender string
+func (_e *Store_Expecter) DeleteMessage(messageID interface{}, roomID interface{}, sender interface{}) *Store_DeleteMessage_Call {
+	return &Store_DeleteMessage_Call{Call: _e.mock.On("DeleteMessage", messageID, roomID, sender)}
 }
 
-func (_c *Store_DeleteMessage_Call) Run(run func(messageID int, roomID int)) *Store_DeleteMessage_Call {
+func (_c *Store_DeleteMessage_Call) Run(run func(messageID int, roomID int, sender string)) *Store_DeleteMessage_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(int), args[1].(int))
+		run(args[0].(int), args[1].(int), args[2].(string))
 	})
 	return _c
 }
@@ -245,7 +246,7 @@ func (_c *Store_DeleteMessage_Call) Return(_a0 types.Message, _a1 error) *Store_
 	return _c
 }
 
-func (_c *Store_DeleteMessage_Call) RunAndReturn(run func(int, int) (types.Message, error)) *Store_DeleteMessage_Call {
+func (_c *Store_DeleteMessage_Call) RunAndReturn(run func(int, int, string) (types.Message, error)) *Store_DeleteMessage_Call {
 	_c.Call.Return(run)
 	return _c
 }
