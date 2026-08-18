@@ -27,11 +27,19 @@ type Store interface {
 
 const (
 	defaultPageSize = 15
-	defaultCursorID = 0 // needs to be 0, sentinel: "$2 = 0" in db/messages.go 
+	defaultCursorID = 0 // needs to be 0, sentinel: "$2 = 0" in db/messages.go
 )
 
 func Health(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "ok"})
+}
+
+func messageLink(c *gin.Context, roomID, messageID, limit int) string {
+	q := c.Request.URL.Query()
+	q.Set("room", strconv.Itoa(roomID))
+	q.Set("before", strconv.Itoa(messageID))
+	q.Set("limit", strconv.Itoa(limit))
+	return c.Request.URL.Path + "?" + q.Encode()
 }
 
 // gets all messages by roomID
@@ -75,7 +83,14 @@ func GetMessages(s Store) gin.HandlerFunc {
 			c.JSON(500, gin.H{"error": "failed to fetch messages"})
 			return
 		}
-		c.JSON(200, messages)
+
+		// HATEOAS links
+		links := types.MessagePageLinks{Self: messageLink(c, roomID, messageID, limit)}
+		if len(messages) == limit && len(messages) > 0 {
+			links.Next = messageLink(c, roomID, messages[len(messages)-1].ID, limit)
+		}
+
+		c.JSON(http.StatusOK, types.MessagePage{Data: messages, Links: links})
 	}
 }
 

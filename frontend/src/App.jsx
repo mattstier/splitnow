@@ -155,8 +155,8 @@ function App() {
         if (!res.ok) throw new Error('failed to load messages')
         return res.json()
       })
-      .then(history => {
-        setMessages(history.map(m => ({ id: m.id, deleted: m.deleted, text: m.content, sender: m.sender, created_at: m.created_at, mine: m.sender === myUsername })))
+.then(history => {
+        setMessages(history.data.map(m => ({ id: m.id, deleted: m.deleted, text: m.content, sender: m.sender, created_at: m.created_at, mine: m.sender === myUsername })))
       })
       .catch(() => setMessages([]))
 

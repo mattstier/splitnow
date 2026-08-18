@@ -275,11 +275,11 @@ func TestGetMessagesByRoom(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var messages []types.Message
-	err := json.Unmarshal(w.Body.Bytes(), &messages)
+	var page types.MessagePage
+	err := json.Unmarshal(w.Body.Bytes(), &page)
 	assert.NoError(t, err)
 
-	assert.Contains(t, messages, types.Message{
+	assert.Contains(t, page.Data, types.Message{
 		ID:        1,
 		RoomID:    1,
 		Sender:    "1",
@@ -287,13 +287,17 @@ func TestGetMessagesByRoom(t *testing.T) {
 		CreatedAt: time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC),
 	})
 
-	assert.Contains(t, messages, types.Message{
+	assert.Contains(t, page.Data, types.Message{
 		ID:        2,
 		RoomID:    1,
 		Sender:    "2",
 		Content:   "bar",
 		CreatedAt: time.Date(2026, 6, 1, 13, 0, 0, 0, time.UTC),
 	})
+
+	// self reflects the request; 2 messages < limit 50 -> no next link
+	assert.Equal(t, "/messages?before=0&limit=50&room=1", page.Links.Self)
+	assert.Equal(t, "", page.Links.Next)
 }
 
 // test getting all the messages of a room that does not exist
@@ -320,13 +324,14 @@ func TestGetMessagesByRoomNonexistentRoom(t *testing.T) {
 	// by design it gives 200 and an empty list (no RoomExists check yet)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var messages []types.Message
-	err := json.Unmarshal(w.Body.Bytes(), &messages)
+	var page types.MessagePage
+	err := json.Unmarshal(w.Body.Bytes(), &page)
 	assert.NoError(t, err)
 
 	// see if the list is indeed empty
-	assert.Len(t, messages, 0)
-	assert.Equal(t, messages, []types.Message{})
+	assert.Len(t, page.Data, 0)
+	assert.Equal(t, page.Data, []types.Message{})
+	assert.Equal(t, "", page.Links.Next)
 }
 
 // test getting all the messages of a room with a failed Store

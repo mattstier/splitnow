@@ -26,6 +26,17 @@ type Membership struct {
 	RoomID int `json:"room_id"`
 }
 
+// HATEOAS specific structs
+type MessagePageLinks struct {
+	Self string `json:"self"`
+	Next string `json:"next,omitempty"`
+}
+
+type MessagePage struct {
+	Data  []Message        `json:"data"`
+	Links MessagePageLinks `json:"links"`
+}
+
 var ErrRoomAlreadyJoined = errors.New("room already joined")
 var ErrNotAMember = errors.New("the user is not a member of this room")
 var ErrMessageNotFound = errors.New("message not found")
