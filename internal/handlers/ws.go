@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -69,6 +70,12 @@ type msgFrame struct {
 	Type    string `json:"type"`
 	Room    int    `json:"room"`
 	Content string `json:"content"`
+}
+
+type deleteFrame struct {
+	Type    string `json:"type"`
+	Message int    `json:"message"`
+	Room    int    `json:"room"`
 }
 
 // outgoing error frame
@@ -191,6 +198,45 @@ func (ws wsDeps) handleSendMessage(client *wsClient, frame msgFrame) {
 	room.sendMessage(client, ws.redisClient, saved)
 }
 
+func (ws wsDeps) handleDeleteMessage(client *wsClient, frame deleteFrame) {
+	// must be subscribed to the room to send in it
+	client.mu.Lock()
+	_, ok := client.rooms[frame.Room]
+	client.mu.Unlock()
+	if !ok {
+		data, _ := json.Marshal(
+			errorFrame{Type: "error", Room: frame.Room, Message: "not subscribed to room"})
+		client.conn.WriteMessage(websocket.TextMessage, data)
+		return
+	}
+	// a member may have left the room while the socket stayed subscribed
+	// therefore we have to check membership each time a message is deleted
+	isMember, err := ws.store.IsMember(client.userID, frame.Room)
+	if err != nil {
+		println("failed to check membership:", err)
+		return
+	}
+	if !isMember {
+		data, _ := json.Marshal(errorFrame{Type: "error", Room: frame.Room, Message: "not a member of room"})
+		client.conn.WriteMessage(websocket.TextMessage, data)
+		return
+	}
+	msg, err := ws.store.DeleteMessage(frame.Message, frame.Room, client.username)
+	if err != nil {
+		if errors.Is(err, types.ErrMessageNotFound) {
+			data, _ := json.Marshal(errorFrame{Type: "error", Room: frame.Room, Message: "message not found"})
+			client.conn.WriteMessage(websocket.TextMessage, data)
+			return
+		}
+		println("failed to delete message:", err)
+		return
+	}
+	// publish without a SenderID, so consume() delivers the deletion to every
+	// subscriber of the room, including the client that deleted the message
+	payload, _ := json.Marshal(pubPayload{Message: msg})
+	ws.redisClient.Publish(context.Background(), "room:"+strconv.Itoa(frame.Room), payload)
+}
+
 // consume runs in its own goroutine per room: every message published to the
 // room's redis channel is forwarded to all locally connected clients.
 // stops when the subscription is closed
@@ -263,6 +309,13 @@ func WS(s Store, redisClient *redis.Client) gin.HandlerFunc {
 				deps.handleUnsubscribe(client, frame)
 			case "send":
 				deps.handleSendMessage(client, frame)
+			case "delete":
+				var df deleteFrame
+				if err := json.Unmarshal(msg, &df); err != nil {
+					println("bad delete frame")
+					continue
+				}
+				deps.handleDeleteMessage(client, df)
 			default:
 				println("unknown frame type:", frame.Type)
 			}

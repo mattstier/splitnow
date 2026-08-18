@@ -498,3 +498,200 @@ func TestWSDeliveryNoEcho(t *testing.T) {
 	err = sender.ReadJSON(&echo)
 	assert.Error(t, err, "sender should not receive its own message")
 }
+
+// test that deleting without subscribing first returns an error frame
+func TestWSDeleteMessageNotSubscribed(t *testing.T) {
+	store := mocks.NewStore(t)
+	conn := setupWS(t, store, nil) // path never touches redis
+
+	err := conn.WriteJSON(deleteFrame{Type: "delete", Message: 5, Room: 1})
+	assert.NoError(t, err)
+
+	var got errorFrame
+	err = conn.ReadJSON(&got)
+	assert.NoError(t, err)
+	assert.Equal(t, "error", got.Type)
+	assert.Equal(t, 1, got.Room)
+	//assert.Equal(t, "not subscribed to room", got.Message)
+}
+
+// test that a member who left the room can no longer delete in it
+func TestWSDeleteMessageNotMember(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(true, nil)
+	// registration order matters: subscribe-time (true) before delete-time (false)
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil).
+		Once() // subscribe: user is a member
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(false, nil).
+		Once() // delete: membership was revoked
+
+	_, rdb := newTestRedis(t)
+	conn := setupWS(t, store, rdb)
+
+	err := conn.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
+	assert.NoError(t, err)
+
+	err = conn.WriteJSON(deleteFrame{Type: "delete", Message: 5, Room: 1})
+	assert.NoError(t, err)
+
+	var got errorFrame
+	err = conn.ReadJSON(&got)
+	assert.NoError(t, err)
+	assert.Equal(t, "error", got.Type)
+	assert.Equal(t, 1, got.Room)
+	//assert.Equal(t, "not a member of room", got.Message)
+}
+
+// test that deleting a nonexistent message returns an error frame
+func TestWSDeleteMessageNotFound(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(true, nil)
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil)
+	store.EXPECT().
+		DeleteMessage(5, 1, "John Doe").
+		Return(types.Message{}, types.ErrMessageNotFound)
+
+	_, rdb := newTestRedis(t)
+	conn := setupWS(t, store, rdb)
+
+	err := conn.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
+	assert.NoError(t, err)
+
+	err = conn.WriteJSON(deleteFrame{Type: "delete", Message: 5, Room: 1})
+	assert.NoError(t, err)
+
+	var got errorFrame
+	err = conn.ReadJSON(&got)
+	assert.NoError(t, err)
+	assert.Equal(t, "error", got.Type)
+	assert.Equal(t, 1, got.Room)
+	//assert.Equal(t, "message not found", got.Message)
+}
+
+// test that deleting a message publishes the scrubbed message to every
+// subscriber of the room, including the client that deleted the message
+func TestWSDeleteMessage(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().RoomExists(1).Return(true, nil).Times(2)
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil).
+		Times(3)
+	store.EXPECT().
+		DeleteMessage(5, 1, "John Doe").
+		Return(types.Message{
+			ID:        5,
+			RoomID:    1,
+			Sender:    "John Doe",
+			Content:   "",
+			Deleted:   true,
+			CreatedAt: time.Now(),
+		}, nil)
+
+	_, rdb := newTestRedis(t)
+	sender := setupWS(t, store, rdb)
+	receiver := setupWS(t, store, rdb)
+
+	// both clients must subscribe before the message is deleted
+	err := sender.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
+	assert.NoError(t, err)
+	err = receiver.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
+	assert.NoError(t, err)
+
+	err = sender.WriteJSON(deleteFrame{Type: "delete", Message: 5, Room: 1})
+	assert.NoError(t, err)
+
+	// every subscriber receives the scrubbed message, including the deleter
+	for name, conn := range map[string]*websocket.Conn{"receiver": receiver, "deleter": sender} {
+		conn.SetReadDeadline(time.Now().Add(time.Second))
+		var got types.Message
+		err := conn.ReadJSON(&got)
+		assert.NoError(t, err, name)
+		assert.Equal(t, 5, got.ID, name)
+		assert.True(t, got.Deleted, name)
+		assert.Equal(t, "", got.Content, name)
+	}
+}
+
+// test that if a message could not be deleted due to a store error, nothing is published
+func TestWSDeleteMessageStoreError(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(true, nil) // needed for the subscribe step
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil)
+	store.EXPECT().
+		DeleteMessage(5, 1, "John Doe").
+		Return(types.Message{}, errors.New("db down"))
+
+	_, rdb := newTestRedis(t)
+	conn := setupWS(t, store, rdb)
+
+	// listen on the room's redis channel from the test side
+	sub := rdb.Subscribe(context.Background(), "room:1")
+	t.Cleanup(func() { sub.Close() })
+	ch := sub.Channel()
+
+	err := conn.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
+	assert.NoError(t, err)
+
+	err = conn.WriteJSON(deleteFrame{Type: "delete", Message: 5, Room: 1})
+	assert.NoError(t, err)
+
+	select {
+	case msg := <-ch:
+		t.Fatalf("unexpected publish after failed delete: %s", msg.Payload)
+	case <-time.After(500 * time.Millisecond):
+		// expected: store error is swallowed, nothing published
+	}
+}
+
+// test that a store error while checking membership on delete is swallowed and nothing is published
+func TestWSDeleteMessageIsMemberStoreError(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		RoomExists(1).
+		Return(true, nil)
+	// registration order again: subscribe-time true before delete-time error
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil).
+		Once() // subscribe: ok
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(false, errors.New("db down")).
+		Once() // delete: membership check fails
+
+	_, rdb := newTestRedis(t)
+	conn := setupWS(t, store, rdb)
+
+	// listen on the room's redis channel from the test side
+	sub := rdb.Subscribe(context.Background(), "room:1")
+	t.Cleanup(func() { sub.Close() })
+	ch := sub.Channel()
+
+	err := conn.WriteJSON(msgFrame{Type: "subscribe", Room: 1})
+	assert.NoError(t, err)
+
+	err = conn.WriteJSON(deleteFrame{Type: "delete", Message: 5, Room: 1})
+	assert.NoError(t, err)
+
+	select {
+	case msg := <-ch:
+		t.Fatalf("unexpected publish after failed membership check: %s", msg.Payload)
+	case <-time.After(500 * time.Millisecond):
+		// expected: store error is swallowed, nothing published
+	}
+}

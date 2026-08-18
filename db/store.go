@@ -16,6 +16,10 @@ func (Store) GetMessagesByRoom(roomID int) ([]types.Message, error) {
 	return GetMessagesByRoom(roomID)
 }
 
+func (Store) DeleteMessage(messageID, roomID int, sender string) (types.Message, error) {
+	return DeleteMessage(messageID, roomID, sender)
+}
+
 func (Store) CreateRoom(name string, creator int) (types.Room, error) {
 	return CreateRoom(name, creator)
 }

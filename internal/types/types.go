@@ -10,6 +10,7 @@ type Message struct {
 	RoomID    int       `json:"room_id"`
 	Sender    string    `json:"sender"`
 	Content   string    `json:"content"`
+	Deleted   bool      `json:"deleted"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -27,3 +28,4 @@ type Membership struct {
 
 var ErrRoomAlreadyJoined = errors.New("room already joined")
 var ErrNotAMember = errors.New("the user is not a member of this room")
+var ErrMessageNotFound = errors.New("message not found")
