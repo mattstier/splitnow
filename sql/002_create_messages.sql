@@ -3,6 +3,7 @@ CREATE TABLE messages (
     room_id INT REFERENCES rooms(id), 
     sender TEXT NOT NULL,
     content TEXT NOT NULL,
+    deleted BOOLEAN NOT NULL DEFAULT FALSE, 
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

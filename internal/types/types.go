@@ -10,6 +10,7 @@ type Message struct {
 	RoomID    int       `json:"room_id"`
 	Sender    string    `json:"sender"`
 	Content   string    `json:"content"`
+	Deleted   bool      `json:"deleted"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
