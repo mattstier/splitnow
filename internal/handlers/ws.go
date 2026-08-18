@@ -231,8 +231,10 @@ func (ws wsDeps) handleDeleteMessage(client *wsClient, frame deleteFrame) {
 		println("failed to delete message:", err)
 		return
 	}
-	room := getChatRoom(frame.Room)
-	room.sendMessage(client, ws.redisClient, msg)
+	// publish without a SenderID, so consume() delivers the deletion to every
+	// subscriber of the room, including the client that deleted the message
+	payload, _ := json.Marshal(pubPayload{Message: msg})
+	ws.redisClient.Publish(context.Background(), "room:"+strconv.Itoa(frame.Room), payload)
 }
 
 // consume runs in its own goroutine per room: every message published to the

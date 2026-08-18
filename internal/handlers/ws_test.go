@@ -578,8 +578,8 @@ func TestWSDeleteMessageNotFound(t *testing.T) {
 	//assert.Equal(t, "message not found", got.Message)
 }
 
-// test that deleting a message publishes the scrubbed message to the other members,
-// but not back to the deleter
+// test that deleting a message publishes the scrubbed message to every
+// subscriber of the room, including the client that deleted the message
 func TestWSDeleteMessage(t *testing.T) {
 	store := mocks.NewStore(t)
 	store.EXPECT().RoomExists(1).Return(true, nil).Times(2)
@@ -611,20 +611,16 @@ func TestWSDeleteMessage(t *testing.T) {
 	err = sender.WriteJSON(deleteFrame{Type: "delete", Message: 5, Room: 1})
 	assert.NoError(t, err)
 
-	// the other member receives the scrubbed message
-	var got types.Message
-	receiver.SetReadDeadline(time.Now().Add(time.Second))
-	err = receiver.ReadJSON(&got)
-	assert.NoError(t, err)
-	assert.Equal(t, 5, got.ID)
-	assert.True(t, got.Deleted)
-	assert.Equal(t, "", got.Content)
-
-	// the deleter does not get an echo of its own deletion
-	sender.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
-	var echo types.Message
-	err = sender.ReadJSON(&echo)
-	assert.Error(t, err, "deleter should not receive its own deletion")
+	// every subscriber receives the scrubbed message, including the deleter
+	for name, conn := range map[string]*websocket.Conn{"receiver": receiver, "deleter": sender} {
+		conn.SetReadDeadline(time.Now().Add(time.Second))
+		var got types.Message
+		err := conn.ReadJSON(&got)
+		assert.NoError(t, err, name)
+		assert.Equal(t, 5, got.ID, name)
+		assert.True(t, got.Deleted, name)
+		assert.Equal(t, "", got.Content, name)
+	}
 }
 
 // test that if a message could not be deleted due to a store error, nothing is published
