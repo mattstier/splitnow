@@ -13,7 +13,7 @@ import (
 
 type Store interface {
 	CreateMessage(roomID int, sender, content string) (types.Message, error)
-	GetMessagesByRoom(roomID int) ([]types.Message, error)
+	GetMessagesByRoom(roomID, messageID, limit int) ([]types.Message, error)
 	DeleteMessage(messageID, roomID int, sender string) (types.Message, error)
 	CreateRoom(name string, creator int) (types.Room, error)
 	GetAllRooms() ([]types.Room, error)
@@ -25,8 +25,22 @@ type Store interface {
 	RemoveMember(userID, roomID int) (types.Membership, error)
 }
 
+const (
+	defaultPageSize = 15
+	defaultCursorID = 0 // needs to be 0, sentinel: "$2 = 0" in db/messages.go
+	maxPageSize     = 100
+)
+
 func Health(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "ok"})
+}
+
+func messageLink(c *gin.Context, roomID, messageID, limit int) string {
+	q := c.Request.URL.Query()
+	q.Set("room", strconv.Itoa(roomID))
+	q.Set("before", strconv.Itoa(messageID))
+	q.Set("limit", strconv.Itoa(limit))
+	return c.Request.URL.Path + "?" + q.Encode()
 }
 
 // gets all messages by roomID
@@ -34,10 +48,27 @@ func GetMessages(s Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roomID, err := strconv.Atoi(c.Query("room"))
 		if err != nil {
-			c.JSON(400, gin.H{"error": "roomID required"})
+			c.JSON(400, gin.H{"error": "invalid query"})
 			return
 		}
 
+		messageID := defaultCursorID
+		if v := c.Query("before"); v != "" {
+			messageID, err = strconv.Atoi(v)
+			if err != nil || messageID < 0 {
+				c.JSON(400, gin.H{"error": "invalid query"})
+				return
+			}
+		}
+
+		limit := defaultPageSize
+		if v := c.Query("limit"); v != "" {
+			limit, err = strconv.Atoi(v)
+			if err != nil || limit < 1 || limit > maxPageSize {
+				c.JSON(400, gin.H{"error": "invalid query"})
+				return
+			}
+		}
 		// get UID from the JWT, check if its a member
 		claims := c.MustGet("user").(*token.Claims)
 		isMember, err := s.IsMember(claims.UserID, roomID)
@@ -48,12 +79,19 @@ func GetMessages(s Store) gin.HandlerFunc {
 			return
 		}
 
-		messages, err := s.GetMessagesByRoom(roomID)
+		messages, err := s.GetMessagesByRoom(roomID, messageID, limit)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "failed to fetch messages"})
 			return
 		}
-		c.JSON(200, messages)
+
+		// HATEOAS links
+		links := types.MessagePageLinks{Self: messageLink(c, roomID, messageID, limit)}
+		if len(messages) == limit && len(messages) > 0 {
+			links.Next = messageLink(c, roomID, messages[len(messages)-1].ID, limit)
+		}
+
+		c.JSON(http.StatusOK, types.MessagePage{Data: messages, Links: links})
 	}
 }
 
@@ -139,7 +177,7 @@ func AddMember(s Store) gin.HandlerFunc {
 
 // NOTE: leaving a room only deletes the membership row. A live websocket stays
 // subscribed and keeps receiving messages until the client sends an
-// "unsubscribe" frame or disconnects, which is currently handled by the frontend. 
+// "unsubscribe" frame or disconnects, which is currently handled by the frontend.
 func RemoveMember(s Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// getting the userID from the JWT directly

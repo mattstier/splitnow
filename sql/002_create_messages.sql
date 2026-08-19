@@ -8,4 +8,4 @@ CREATE TABLE messages (
 );
 
 -- index to speed up querying old messages of a room
-CREATE INDEX idx_messages_room_created ON messages (room_id, created_at);
+CREATE INDEX idx_messages_room_id ON messages (room_id, id);
