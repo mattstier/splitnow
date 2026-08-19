@@ -156,7 +156,10 @@ function App() {
         return res.json()
       })
 .then(history => {
-        setMessages(history.data.map(m => ({ id: m.id, deleted: m.deleted, text: m.content, sender: m.sender, created_at: m.created_at, mine: m.sender === myUsername })))
+        setMessages(history.data
+            .map(m => ({ id: m.id, deleted: m.deleted, text: m.content, sender: m.sender, created_at: m.created_at, mine: m.sender === myUsername }))
+            .slice()
+            .reverse()) // after map we need to reverse it, as the DB returns it with DESC msgID 
       })
       .catch(() => setMessages([]))
 
