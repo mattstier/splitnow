@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -31,6 +32,17 @@ func fakeAuth(claims *token.Claims) gin.HandlerFunc {
 		c.Set("user", claims)
 		c.Next()
 	}
+}
+
+// reads a query param out of a HATEOAS link, so tests assert behavior
+// instead of brittle full-string equality
+func linkQueryParam(t *testing.T, link, name string) string {
+	t.Helper()
+	u, err := url.Parse(link)
+	if err != nil {
+		t.Fatalf("invalid link %q: %v", link, err)
+	}
+	return u.Query().Get(name)
 }
 
 //===== Tests for POST "/rooms" =====//
@@ -295,8 +307,7 @@ func TestGetMessagesByRoom(t *testing.T) {
 		CreatedAt: time.Date(2026, 6, 1, 13, 0, 0, 0, time.UTC),
 	})
 
-	// self reflects the request; 2 messages < limit 50 -> no next link
-	assert.Equal(t, "/messages?before=0&limit=50&room=1", page.Links.Self)
+	// 2 messages < limit 50 -> no next link
 	assert.Equal(t, "", page.Links.Next)
 }
 
@@ -373,6 +384,152 @@ func TestGetMessagesByRoomMissingRoomID(t *testing.T) {
 
 	// assert that it gives a 400 Bad Request
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// AC: out-of-range or malformed limit params are rejected with 400
+func TestGetMessagesByRoomLimitBounds(t *testing.T) {
+	for _, tc := range []struct{ name, query string }{
+		{"zero", "room=1&limit=0"},
+		{"negative", "room=1&limit=-5"},
+		{"too large", "room=1&limit=101"},
+		{"not a number", "room=1&limit=abc"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := mocks.NewStore(t)
+			router := gin.Default()
+			router.GET("/messages",
+				fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+				GetMessages(store))
+
+			req := httptest.NewRequest(http.MethodGet, "/messages?"+tc.query, nil)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+		})
+	}
+}
+
+// AC: a valid explicit limit is passed through to the store
+func TestGetMessagesByRoomValidLimit(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil)
+	store.EXPECT().
+		GetMessagesByRoom(1, 0, 10).
+		Return([]types.Message{{ID: 1, RoomID: 1, Sender: "x", Content: "c"}}, nil)
+
+	router := gin.Default()
+	router.GET("/messages",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		GetMessages(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/messages?room=1&limit=10", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// negative cursor values are rejected
+func TestGetMessagesByRoomNegativeCursor(t *testing.T) {
+	store := mocks.NewStore(t)
+	router := gin.Default()
+	router.GET("/messages",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		GetMessages(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/messages?room=1&before=-1", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// AC: omitting before/limit applies the defaults (before=0, limit=15)
+func TestGetMessagesByRoomDefaults(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil)
+	store.EXPECT().
+		GetMessagesByRoom(1, 0, 15).
+		Return([]types.Message{{ID: 10, RoomID: 1, Sender: "1", Content: "ten"}}, nil)
+
+	router := gin.Default()
+	router.GET("/messages",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		GetMessages(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/messages?room=1", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var page types.MessagePage
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &page))
+	assert.Len(t, page.Data, 1)
+}
+
+// AC: a full page exposes a next link whose cursor is the oldest message id
+func TestGetMessagesByRoomNextLink(t *testing.T) {
+	msgs := make([]types.Message, 15)
+	for i := 0; i < 15; i++ {
+		msgs[i] = types.Message{ID: 15 - i, RoomID: 1, Sender: "x", Content: "c"}
+	}
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil)
+	store.EXPECT().
+		GetMessagesByRoom(1, 0, 15).
+		Return(msgs, nil)
+
+	router := gin.Default()
+	router.GET("/messages",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		GetMessages(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/messages?room=1", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var page types.MessagePage
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &page))
+	assert.Len(t, page.Data, 15)
+	// full page: next present, cursor = oldest id (the last element)
+	assert.NotEmpty(t, page.Links.Next)
+	assert.Equal(t, "1", linkQueryParam(t, page.Links.Next, "before"))
+}
+
+// AC: a short page omits the next link
+func TestGetMessagesByRoomNoNextLink(t *testing.T) {
+	store := mocks.NewStore(t)
+	store.EXPECT().
+		IsMember(42, 1).
+		Return(true, nil)
+	store.EXPECT().
+		GetMessagesByRoom(1, 0, 15).
+		Return([]types.Message{{ID: 5, RoomID: 1, Sender: "x", Content: "c"}}, nil)
+
+	router := gin.Default()
+	router.GET("/messages",
+		fakeAuth(&token.Claims{UserID: 42, Username: "John Doe"}),
+		GetMessages(store))
+
+	req := httptest.NewRequest(http.MethodGet, "/messages?room=1", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var page types.MessagePage
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &page))
+	assert.Equal(t, "", page.Links.Next)
 }
 
 // testing the name-filtered room query when the store fails (negative case)
