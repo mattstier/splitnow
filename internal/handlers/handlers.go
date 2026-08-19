@@ -28,6 +28,7 @@ type Store interface {
 const (
 	defaultPageSize = 15
 	defaultCursorID = 0 // needs to be 0, sentinel: "$2 = 0" in db/messages.go
+	maxPageSize     = 100
 )
 
 func Health(c *gin.Context) {
@@ -54,7 +55,7 @@ func GetMessages(s Store) gin.HandlerFunc {
 		messageID := defaultCursorID
 		if v := c.Query("before"); v != "" {
 			messageID, err = strconv.Atoi(v)
-			if err != nil {
+			if err != nil || messageID < 0 {
 				c.JSON(400, gin.H{"error": "invalid query"})
 				return
 			}
@@ -63,7 +64,7 @@ func GetMessages(s Store) gin.HandlerFunc {
 		limit := defaultPageSize
 		if v := c.Query("limit"); v != "" {
 			limit, err = strconv.Atoi(v)
-			if err != nil {
+			if err != nil || limit < 1 || limit > maxPageSize {
 				c.JSON(400, gin.H{"error": "invalid query"})
 				return
 			}
