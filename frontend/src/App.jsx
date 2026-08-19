@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import api from './Api.js'
 
 const formatTime = (ts) => {
   if (!ts) return ''
@@ -33,52 +34,34 @@ function App() {
     }
   })()
 
-  // makes a fetch with the token attached, and logs out on 401
-  const authedFetch = (url, opts = {}) =>
-    fetch(url, {
-      ...opts,
-      headers: { ...opts.headers, Authorization: 'Bearer ' + token }
-    }).then(res => {
-      if (res.status === 401) setToken('')
-      return res
-    })
-
   const finishAuth = (data) => {
     localStorage.setItem('token', data.token)
     setToken(data.token)
   }
 
   const login = () => {
-    fetch('/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    })
+    api.post('/login', { email, password })
       .then(res => {
-        if (!res.ok) { setLoginError('invalid credentials'); return null }
-        return res.json()
+        return res.data
       })
       .then(data => { if (data) finishAuth(data) })
+      .catch(() => { setLoginError('invalid credentials'); return null })
   }
 
   const register = () => {
-    fetch('/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, username, password })
-    })
-      .then(res => {
-        if (res.status === 409) { setLoginError('username or email already taken'); return null }
-        if (!res.ok) { setLoginError('registration failed'); return null }
+    api.post('/users', { email, username, password })
+      .then(() => {
         // /users returns no token, so log in right after
-        return fetch('/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        })
+        return api.post('/login', 
+          { email, password })
       })
-      .then(res => res && res.json())
+      .then(res => res && res.data)
       .then(data => data && finishAuth(data))
+      .catch(err => {
+            if (err.response?.status === 409) setLoginError('username or email already taken')
+            else setLoginError('registration failed')
+        }
+      )
   }
 
   const submit = mode === 'login' ? login : register
@@ -94,46 +77,34 @@ function App() {
   // registers a new room and joins it
   const createRoom = () => {
     if (!newRoomName.trim()) return
-    authedFetch('/rooms', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newRoomName })
-    })
-      .then(res => { if (!res.ok) return; return res.json() })
-      .then(r => {
-        if (!r) return
+    api.post('/rooms', { name: newRoomName })
+      .then(res => {
+        const r = res.data
         setRooms(prev => [...prev, r])
-        // the creator is auto-added as a member on the backend
         setMyRooms(prev => [...prev, r])
-        openRoom({ id: r.id, name: r.name })
+        openRoom({ id: r.id, name: r.name })      
       })
+      .catch(() => {})
   }
 
   // joins a public room and opens it
   const joinRoom = (id) => {
-    authedFetch(`/rooms/${id}/join`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    })
-      .then(res => {
-        if (!res.ok && res.status !== 409) return // 409 = already a member
-        const joined = rooms.find(r => r.id === id)
-        if (joined) {
-          setMyRooms(prev => [...prev, joined])
-          openRoom({ id: joined.id, name: joined.name })
-        }
-      })
-  }
+      const joined = rooms.find(r => r.id === id)
+      api.post(`/rooms/${id}/join`, null, { validateStatus: () => true })
+        .then(res => {
+          if (res.status >= 400 && res.status !== 409) return
+          if (joined) {
+            setMyRooms(prev => [...prev, joined])
+            openRoom({ id: joined.id, name: joined.name })
+          }
+        })
+    }  
 
-  // leaves the current room and returns to the picker
+// leaves the current room and returns to the picker
   const leaveRoom = () => {
     if (!room) return
-    authedFetch(`/rooms/${room.id}/leave`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    })
-      .then(res => {
-        if (!res.ok) return
+    api.post(`/rooms/${room.id}/leave`)
+      .then(() => {
         setMyRooms(prev => prev.filter(r => r.id !== room.id))
         setMessages([])
         setRoom(null)
@@ -142,10 +113,9 @@ function App() {
   const loadOlder = () => {
     if (!nextLink || loadingOlderRef.current) return
     loadingOlderRef.current = true
-    authedFetch(nextLink)
+    api.get(nextLink)
       .then(res => {
-        if (!res.ok) throw new Error('failed to load older messages')
-        return res.json()
+        return res.data
       })
       .then(page => {
         setMessages(prev => [...page.data
@@ -175,11 +145,11 @@ function App() {
   // load the list of rooms to join
   useEffect(() => {
     if (!token) return
-    authedFetch('/rooms')
-      .then(res => res.json())
+    api.get('/rooms')
+      .then(res => res.data)
       .then(setRooms)
-    authedFetch('/rooms/mine')
-      .then(res => res.json())
+    api.get('/rooms/mine')
+      .then(res => res.data)
       .then(setMyRooms)
   }, [token])
 
@@ -188,10 +158,9 @@ function App() {
     if (!room) return
 
     // get all messages of the given room before opening the socket
-    authedFetch('/messages?room=' + room.id)
+    api.get('/messages?room=' + room.id)
       .then(res => {
-        if (!res.ok) throw new Error('failed to load messages')
-        return res.json()
+        return res.data
       })
 .then(history => {
         setMessages(history.data
