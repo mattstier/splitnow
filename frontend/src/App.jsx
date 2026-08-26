@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import api from './Api.js'
+import { useAuthStore } from './stores/Auth.js'
 
 const formatTime = (ts) => {
   if (!ts) return ''
@@ -7,7 +8,7 @@ const formatTime = (ts) => {
 }
 
 function App() {
-  const [token, setToken] = useState(() => localStorage.getItem('token') || '')
+  const token = useAuthStore((s) => s.token)  
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
@@ -34,10 +35,7 @@ function App() {
     }
   })()
 
-  const finishAuth = (data) => {
-    localStorage.setItem('token', data.token)
-    setToken(data.token)
-  }
+  const finishAuth = useAuthStore.getState().finishAuth 
 
   const login = () => {
     api.post('/login', { email, password })

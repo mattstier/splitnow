@@ -1,11 +1,11 @@
 import axios from "axios";
+import { useAuthStore } from "./stores/Auth.js";
 
-const getToken = () => localStorage.getItem('token')
 const api = axios.create();
 
 // attach bearer with token to every outgoing request
 api.interceptors.request.use((config) => {
-    const token = getToken()
+    const token = useAuthStore.getState().token
     if (token) config.headers.Authorization = `Bearer ${token}`;
     return config;
 });
@@ -16,8 +16,7 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('token');
-      window.location.reload();
+      useAuthStore.getState().logout();
     }
     return Promise.reject(err);
   }
