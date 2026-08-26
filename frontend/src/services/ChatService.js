@@ -7,7 +7,7 @@ export const chatService = {
   fetchPage: (url) => api.get(url),
 
   connect: (token, roomID, onMessage) => {
-    ws = new WebSocket('ws://localhost:5173/ws?token=' + token)
+    ws = new WebSocket(`ws://${window.location.host}/ws?token=${token}`)
     ws.onopen = () => ws.send(JSON.stringify({ type: 'subscribe', room: roomID }))
     ws.onmessage = (e) => onMessage(JSON.parse(e.data))
   },
