@@ -1,7 +1,8 @@
 import { useRoomStore } from '../stores/RoomStore.js'
 import { useChatStore } from '../stores/ChatStore.js'
+import { useEffect } from 'react'
 
-// login/register view
+// room picker view
 export default function RoomPickerView() {
   const rooms = useRoomStore((s) => s.rooms)
   const myRooms = useRoomStore((s) => s.myRooms)
@@ -26,6 +27,11 @@ export default function RoomPickerView() {
     useChatStore.getState().clearChat()
     useRoomStore.getState().openRoom(r)
   }
+
+  useEffect(() => {
+    useRoomStore.getState().fetchRooms()
+    useRoomStore.getState().fetchMyRooms()
+  }, [])
 
   return (
     <div className="flex flex-col h-screen bg-zinc-900 text-white">
