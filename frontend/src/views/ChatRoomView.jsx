@@ -2,6 +2,9 @@ import { useChatStore } from '../stores/ChatStore.js'
 import { useRoomStore } from '../stores/RoomStore.js'
 import { useAuthStore } from '../stores/AuthStore.js'
 import { useRef, useState, useEffect } from 'react'
+import InputField from '../components/InputField.jsx'
+import PrimaryButton from '../components/PrimaryButton.jsx'
+import SecondaryButton from '../components/SecondaryButton.jsx'
 
 const formatTime = (ts) => {
   if (!ts) return ''
@@ -78,30 +81,27 @@ export default function ChatRoomView() {
   return (
     <div className="relative flex flex-col h-screen bg-zinc-900 text-white">
       <div className="border-b border-zinc-700 p-4 flex items-center gap-3">
-        <button
+        <SecondaryButton
+          className="px-3 py-1 text-sm"
           onClick={() => {
             useChatStore.getState().clearChat()
             useRoomStore.getState().openRoom(null)
           }}
-          className="bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 py-1 text-sm cursor-pointer"
         >
           ← Back
-        </button>
+        </SecondaryButton>
         <h1 className="text-lg font-semibold">Room: {room.name}</h1>
         {nextLink && (
-          <button
-            onClick={loadOlder}
-            className="bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 py-1 text-sm cursor-pointer"
-          >
+          <SecondaryButton className="px-3 py-1 text-sm" onClick={loadOlder}>
             Load History
-          </button>
+          </SecondaryButton>
         )}
-        <button
+        <SecondaryButton
+          className="px-3 py-1 text-sm ml-auto hover:bg-red-700"
           onClick={leaveRoom}
-          className="ml-auto bg-zinc-800 hover:bg-red-700 rounded-lg px-3 py-1 text-sm cursor-pointer"
         >
           Leave
-        </button>
+        </SecondaryButton>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -130,31 +130,27 @@ export default function ChatRoomView() {
       </div>
 
       <div className="border-t border-zinc-700 p-4 flex gap-2">
-        <input
-          className="flex-1 bg-zinc-800 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+        <InputField
+          className="flex-1"
           value={input}
           onChange={(e) => useChatStore.getState().setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && send()}
           placeholder="Type a message..."
         />
-        <button
-          className="bg-blue-600 hover:bg-blue-700 rounded-lg px-6 py-2 font-medium cursor-pointer"
-          onClick={send}
-        >
+        <PrimaryButton onClick={send}>
           Send
-        </button>
+        </PrimaryButton>
       </div>
 
       {showBottomBtn && (
-        <button
+        <PrimaryButton
           onClick={scrollToBottom}
-          className="absolute bottom-20 right-4 z-10 bg-blue-600 hover:bg-blue-700 rounded-full w-10 h-10 text-xl flex items-center justify-center cursor-pointer shadow-lg"
+          className="absolute bottom-20 right-4 z-10 rounded-full w-10 h-10 text-xl flex items-center justify-center shadow-lg"
           title="Jump to latest"
         >
           ↓
-        </button>
+        </PrimaryButton>
       )}
     </div>
-
   )
 }

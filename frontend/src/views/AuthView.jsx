@@ -1,5 +1,8 @@
 import { useAuthStore } from '../stores/AuthStore.js'
 import { useState } from 'react'
+import InputField from '../components/InputField.jsx'
+import PrimaryButton from '../components/PrimaryButton.jsx'
+import SecondaryButton from '../components/SecondaryButton.jsx'
 
 // login/register view
 export default function AuthView() {
@@ -19,41 +22,41 @@ export default function AuthView() {
       <div className="w-80 space-y-4">
         <h1 className="text-lg font-semibold text-center">{mode === 'login' ? 'Log in' : 'Register'}</h1>
         {mode === 'register' && (
-          <input
+          <InputField
             type="text"
-            className="w-full bg-zinc-800 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="Username"
           />
         )}
-        <input
+        <InputField
           type="email"
-          className="w-full bg-zinc-800 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Email"
         />
-        <input
+        <InputField
           type="password"
-          className="w-full bg-zinc-800 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && submit()}
           placeholder="Password"
         />
-        <button
-          className="w-full bg-blue-600 hover:bg-blue-700 rounded-lg px-6 py-2 font-medium cursor-pointer"
+        <PrimaryButton
+          className="w-full"
           onClick={submit}
         >
           {mode === 'login' ? 'Log in' : 'Register'}
-        </button>
-        <button
-          className="w-full text-zinc-400 hover:text-white text-sm cursor-pointer"
+        </PrimaryButton>
+        <SecondaryButton
+          className="w-full text-zinc-400 hover:text-white text-sm"
           onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); useAuthStore.setState({ loginError: '' }) }}
         >
           {mode === 'login' ? 'need an account? Register' : 'have an account? Log in'}
-        </button>
+        </SecondaryButton>
         {loginError && <p className="text-red-500 text-sm text-center">{loginError}</p>}
       </div>
     </div>
