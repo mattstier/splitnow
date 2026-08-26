@@ -1,9 +1,17 @@
 import { create } from 'zustand'
 import { authService } from '../services/AuthService.js'
 
-export const useAuthStore = create((set) => ({
+export const useAuthStore = create((set, get) => ({
   token: localStorage.getItem('token') || '',
   loginError: '',
+
+  get username() {
+    try {
+      return JSON.parse(atob(get().token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).username
+    } catch {
+      return ''
+    }
+  },
 
   register: (email, username, password) => {
     authService

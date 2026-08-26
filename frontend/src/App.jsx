@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import api from './Api.js'
 import { useAuthStore } from './stores/AuthStore.js'
 import { useRoomStore } from './stores/RoomStore.js'
+import { useChatStore } from './stores/ChatStore.js'
 
 const formatTime = (ts) => {
   if (!ts) return ''
@@ -19,22 +19,12 @@ function App() {
   const rooms = useRoomStore((s) => s.rooms)
   const myRooms = useRoomStore((s) => s.myRooms)
   const newRoomName = useRoomStore((s) => s.newRoomName)
-  const [messages, setMessages] = useState([])
-  const [nextLink, setNextLink] = useState(null)
-  const [input, setInput] = useState('')
+  const messages = useChatStore((s) => s.messages)
+  const nextLink = useChatStore((s) => s.nextLink)
+  const input = useChatStore((s) => s.input)
   const [showBottomBtn, setShowBottomBtn] = useState(false)
-  const wsRef = useRef(null)
   const scrollRef = useRef(null)
   const loadingOlderRef = useRef(false)
-
-  // own username, decoded from the JWT, used to flag own messages in history
-  const myUsername = (() => {
-    try {
-      return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).username
-    } catch {
-      return ''
-    }
-  })()
 
   const submit = mode === 'login'
     ? () => useAuthStore.getState().login(email, password)
@@ -42,8 +32,7 @@ function App() {
 
   // opens a room and clears the previous room's messages so they never leak in
   const openRoom = (r) => {
-    setMessages([])
-    setNextLink(null)
+    useChatStore.getState().clearChat()
     setShowBottomBtn(false)
     useRoomStore.getState().openRoom(r)
   }
@@ -65,24 +54,15 @@ function App() {
   // leaves the current room and returns to the picker
   const leaveRoom = () => {
     if (!room) return
+    useChatStore.getState().clearChat()
     useRoomStore.getState().leaveRoom()
-    setMessages([])
   }
+
   const loadOlder = () => {
     if (!nextLink || loadingOlderRef.current) return
     loadingOlderRef.current = true
-    api.get(nextLink)
-      .then(res => {
-        return res.data
-      })
-      .then(page => {
-        setMessages(prev => [...page.data
-          .map(m => ({ id: m.id, deleted: m.deleted, text: m.content, sender: m.sender, created_at: m.created_at, mine: m.sender === myUsername }))
-          .slice()
-          .reverse(), ...prev])
-        setNextLink(page.links.next || null)
-      })
-      .finally(() => { loadingOlderRef.current = false })
+    useChatStore.getState().loadOlder()
+    loadingOlderRef.current = false
   }
 
   // shows the jump-to-bottom button when the user scrolls away from the latest message
@@ -107,55 +87,22 @@ function App() {
     useRoomStore.getState().fetchMyRooms()
   }, [token])
 
-  // runs when joining a room, opens a websocket
+  // runs when joining a room: fetch messages + open websocket
   useEffect(() => {
     if (!room) return
-
-    // get all messages of the given room before opening the socket
-    api.get('/messages?room=' + room.id)
-      .then(res => {
-        return res.data
-      })
-      .then(history => {
-        setMessages(history.data
-          .map(m => ({ id: m.id, deleted: m.deleted, text: m.content, sender: m.sender, created_at: m.created_at, mine: m.sender === myUsername }))
-          .slice()
-          .reverse()) // after map we need to reverse it, as the DB returns it with DESC msgID
-        setNextLink(history.links.next || null)
-      })
-      .catch(() => setMessages([]))
-
-    const ws = new WebSocket('ws://localhost:5173/ws?token=' + token)
-    ws.onopen = () => ws.send(JSON.stringify({ type: 'subscribe', room: room.id }))
-    // here we define the message format with a flag 'mine' to handle own messages
-    ws.onmessage = (e) => {
-      const d = JSON.parse(e.data)
-      // server-confirmed deletion: replace the message in place, keeping order
-      if (d.deleted) {
-        setMessages(prev => prev.map(m => m.id === d.id ? { ...m, deleted: true, text: '' } : m))
-        return
-      }
-      if (d.content === undefined) return
-      setMessages((prev) => [...prev, { id: d.id, deleted: false, text: d.content, sender: d.sender, created_at: d.created_at, mine: d.sender === myUsername }])
-    }
-    wsRef.current = ws
-    return () => ws.close()
+    useChatStore.getState().fetchMessages(room.id)
+    useChatStore.getState().connect(token, room.id)
+    return () => useChatStore.getState().disconnect()
   }, [room?.id])
 
   const send = () => {
     if (input.trim()) {
-      // sends rawtext to backend
-      wsRef.current.send(JSON.stringify({ type: 'send', room: room.id, content: input }))
-      // flags message as own
-      setMessages(prev => [...prev, { text: input, sender: 'You', created_at: new Date().toISOString(), mine: true }])
-      // clearing text box
-      setInput('')
+      useChatStore.getState().send(room.id, input)
     }
   }
 
-  // deletes a message; the confirmed update arrives via the ws broadcast
   const deleteMessage = (id) => {
-    wsRef.current.send(JSON.stringify({ type: 'delete', room: room.id, message: id }))
+    useChatStore.getState().deleteMessage(room.id, id)
   }
 
   // room picker view
@@ -276,7 +223,7 @@ function App() {
       <div className="border-b border-zinc-700 p-4 flex items-center gap-3">
         <button
           onClick={() => {
-            setMessages([])
+            useChatStore.getState().clearChat()
             useRoomStore.getState().openRoom(null)
           }}
           className="bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 py-1 text-sm cursor-pointer"
@@ -329,7 +276,7 @@ function App() {
         <input
           className="flex-1 bg-zinc-800 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => useChatStore.getState().setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && send()}
           placeholder="Type a message..."
         />
