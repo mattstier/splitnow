@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import api from './Api.js'
-import { useAuthStore } from './stores/Auth.js'
+import { useAuthStore } from './stores/AuthStore.js'
+import { useRoomStore } from './stores/RoomStore.js'
 
 const formatTime = (ts) => {
   if (!ts) return ''
@@ -14,13 +15,13 @@ function App() {
   const [username, setUsername] = useState('')
   const [mode, setMode] = useState('login')
   const loginError = useAuthStore((s) => s.loginError)
-  const [room, setRoom] = useState(null)
-  const [rooms, setRooms] = useState([])
-  const [myRooms, setMyRooms] = useState([])
+  const room = useRoomStore((s) => s.room)
+  const rooms = useRoomStore((s) => s.rooms)
+  const myRooms = useRoomStore((s) => s.myRooms)
+  const newRoomName = useRoomStore((s) => s.newRoomName)
   const [messages, setMessages] = useState([])
   const [nextLink, setNextLink] = useState(null)
   const [input, setInput] = useState('')
-  const [newRoomName, setNewRoomName] = useState('')
   const [showBottomBtn, setShowBottomBtn] = useState(false)
   const wsRef = useRef(null)
   const scrollRef = useRef(null)
@@ -44,44 +45,28 @@ function App() {
     setMessages([])
     setNextLink(null)
     setShowBottomBtn(false)
-    setRoom(r)
+    useRoomStore.getState().openRoom(r)
   }
 
   // registers a new room and joins it
   const createRoom = () => {
     if (!newRoomName.trim()) return
-    api.post('/rooms', { name: newRoomName })
-      .then(res => {
-        const r = res.data
-        setRooms(prev => [...prev, r])
-        setMyRooms(prev => [...prev, r])
-        openRoom({ id: r.id, name: r.name })
-      })
-      .catch(() => { })
+    useRoomStore.getState().createRoom(newRoomName)
+    useRoomStore.getState().setNewRoomName('')
   }
 
   // joins a public room and opens it
   const joinRoom = (id) => {
+    useRoomStore.getState().joinRoom(id)
     const joined = rooms.find(r => r.id === id)
-    api.post(`/rooms/${id}/join`, null, { validateStatus: () => true })
-      .then(res => {
-        if (res.status >= 400 && res.status !== 409) return
-        if (joined) {
-          setMyRooms(prev => [...prev, joined])
-          openRoom({ id: joined.id, name: joined.name })
-        }
-      })
+    if (joined) openRoom({ id: joined.id, name: joined.name })
   }
 
   // leaves the current room and returns to the picker
   const leaveRoom = () => {
     if (!room) return
-    api.post(`/rooms/${room.id}/leave`)
-      .then(() => {
-        setMyRooms(prev => prev.filter(r => r.id !== room.id))
-        setMessages([])
-        setRoom(null)
-      })
+    useRoomStore.getState().leaveRoom()
+    setMessages([])
   }
   const loadOlder = () => {
     if (!nextLink || loadingOlderRef.current) return
@@ -118,12 +103,8 @@ function App() {
   // load the list of rooms to join
   useEffect(() => {
     if (!token) return
-    api.get('/rooms')
-      .then(res => res.data)
-      .then(setRooms)
-    api.get('/rooms/mine')
-      .then(res => res.data)
-      .then(setMyRooms)
+    useRoomStore.getState().fetchRooms()
+    useRoomStore.getState().fetchMyRooms()
   }, [token])
 
   // runs when joining a room, opens a websocket
@@ -239,7 +220,7 @@ function App() {
           <input
             className="flex-1 bg-zinc-800 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
             value={newRoomName}
-            onChange={(e) => setNewRoomName(e.target.value)}
+            onChange={(e) => useRoomStore.getState().setNewRoomName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && createRoom()}
             placeholder="New room name..."
           />
@@ -294,7 +275,10 @@ function App() {
     <div className="relative flex flex-col h-screen bg-zinc-900 text-white">
       <div className="border-b border-zinc-700 p-4 flex items-center gap-3">
         <button
-          onClick={() => { setMessages([]); setRoom(null) }}
+          onClick={() => {
+            setMessages([])
+            useRoomStore.getState().openRoom(null)
+          }}
           className="bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 py-1 text-sm cursor-pointer"
         >
           ← Back

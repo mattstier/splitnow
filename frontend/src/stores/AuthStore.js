@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { authService } from '../services/Auth.js'
+import { authService } from '../services/AuthService.js'
 
 export const useAuthStore = create((set) => ({
   token: localStorage.getItem('token') || '',
