@@ -19,8 +19,6 @@ export default function RoomPickerView() {
   // joins a public room and opens it
   const joinRoom = (id) => {
     useRoomStore.getState().joinRoom(id)
-    const joined = rooms.find(r => r.id === id)
-    if (joined) openRoom({ id: joined.id, name: joined.name })
   }
 
   // opens a room and clears the previous room's messages so they never leak in
