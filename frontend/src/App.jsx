@@ -8,12 +8,12 @@ const formatTime = (ts) => {
 }
 
 function App() {
-  const token = useAuthStore((s) => s.token)  
+  const token = useAuthStore((s) => s.token)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
   const [mode, setMode] = useState('login')
-  const [loginError, setLoginError] = useState('')
+  const loginError = useAuthStore((s) => s.loginError)
   const [room, setRoom] = useState(null)
   const [rooms, setRooms] = useState([])
   const [myRooms, setMyRooms] = useState([])
@@ -35,34 +35,9 @@ function App() {
     }
   })()
 
-  const finishAuth = useAuthStore.getState().finishAuth 
-
-  const login = () => {
-    api.post('/login', { email, password })
-      .then(res => {
-        return res.data
-      })
-      .then(data => { if (data) finishAuth(data) })
-      .catch(() => { setLoginError('invalid credentials'); return null })
-  }
-
-  const register = () => {
-    api.post('/users', { email, username, password })
-      .then(() => {
-        // /users returns no token, so log in right after
-        return api.post('/login', 
-          { email, password })
-      })
-      .then(res => res && res.data)
-      .then(data => data && finishAuth(data))
-      .catch(err => {
-            if (err.response?.status === 409) setLoginError('username or email already taken')
-            else setLoginError('registration failed')
-        }
-      )
-  }
-
-  const submit = mode === 'login' ? login : register
+  const submit = mode === 'login'
+    ? () => useAuthStore.getState().login(email, password)
+    : () => useAuthStore.getState().register(email, username, password)
 
   // opens a room and clears the previous room's messages so they never leak in
   const openRoom = (r) => {
@@ -80,25 +55,25 @@ function App() {
         const r = res.data
         setRooms(prev => [...prev, r])
         setMyRooms(prev => [...prev, r])
-        openRoom({ id: r.id, name: r.name })      
+        openRoom({ id: r.id, name: r.name })
       })
-      .catch(() => {})
+      .catch(() => { })
   }
 
   // joins a public room and opens it
   const joinRoom = (id) => {
-      const joined = rooms.find(r => r.id === id)
-      api.post(`/rooms/${id}/join`, null, { validateStatus: () => true })
-        .then(res => {
-          if (res.status >= 400 && res.status !== 409) return
-          if (joined) {
-            setMyRooms(prev => [...prev, joined])
-            openRoom({ id: joined.id, name: joined.name })
-          }
-        })
-    }  
+    const joined = rooms.find(r => r.id === id)
+    api.post(`/rooms/${id}/join`, null, { validateStatus: () => true })
+      .then(res => {
+        if (res.status >= 400 && res.status !== 409) return
+        if (joined) {
+          setMyRooms(prev => [...prev, joined])
+          openRoom({ id: joined.id, name: joined.name })
+        }
+      })
+  }
 
-// leaves the current room and returns to the picker
+  // leaves the current room and returns to the picker
   const leaveRoom = () => {
     if (!room) return
     api.post(`/rooms/${room.id}/leave`)
@@ -160,11 +135,11 @@ function App() {
       .then(res => {
         return res.data
       })
-.then(history => {
+      .then(history => {
         setMessages(history.data
-            .map(m => ({ id: m.id, deleted: m.deleted, text: m.content, sender: m.sender, created_at: m.created_at, mine: m.sender === myUsername }))
-            .slice()
-            .reverse()) // after map we need to reverse it, as the DB returns it with DESC msgID
+          .map(m => ({ id: m.id, deleted: m.deleted, text: m.content, sender: m.sender, created_at: m.created_at, mine: m.sender === myUsername }))
+          .slice()
+          .reverse()) // after map we need to reverse it, as the DB returns it with DESC msgID
         setNextLink(history.links.next || null)
       })
       .catch(() => setMessages([]))
@@ -240,7 +215,7 @@ function App() {
           </button>
           <button
             className="w-full text-zinc-400 hover:text-white text-sm cursor-pointer"
-            onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setLoginError('') }}
+            onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); useAuthStore.setState({ loginError: '' }) }}
           >
             {mode === 'login' ? 'need an account? Register' : 'have an account? Log in'}
           </button>
@@ -350,7 +325,7 @@ function App() {
               <div className={`text-xs text-zinc-500 mb-1 ${m.mine ? 'text-right' : 'text-left'}`}>
                 {m.sender} · {formatTime(m.created_at)}
               </div>
-<div className={`rounded-lg px-4 py-2 ${m.mine ? 'bg-blue-600' : 'bg-zinc-800'}`}>
+              <div className={`rounded-lg px-4 py-2 ${m.mine ? 'bg-blue-600' : 'bg-zinc-800'}`}>
                 {m.deleted ? <span className="italic text-zinc-200">**message deleted**</span> : m.text}
               </div>
             </div>
@@ -362,7 +337,7 @@ function App() {
                 delete
               </button>
             )}
-         </div>
+          </div>
         ))}
       </div>
 
