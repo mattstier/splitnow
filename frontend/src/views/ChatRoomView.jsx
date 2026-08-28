@@ -5,11 +5,7 @@ import { useRef, useState, useEffect } from 'react'
 import InputField from '../components/InputField.jsx'
 import PrimaryButton from '../components/PrimaryButton.jsx'
 import SecondaryButton from '../components/SecondaryButton.jsx'
-
-const formatTime = (ts) => {
-  if (!ts) return ''
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
+import MessageBubble from '../components/MessageBubble.jsx'
 
 // chatroom view
 export default function ChatRoomView() {
@@ -109,27 +105,7 @@ export default function ChatRoomView() {
 
           // skip rendering offscreen rows so long history stays smooth
           <div key={i} className={`[content-visibility:auto] flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
-            <div className="max-w-[80%]">
-              <div className={`text-xs text-zinc-500 mb-1 ${m.mine ? 'text-right' : 'text-left'}`}>
-                {m.sender} · {formatTime(m.created_at)}
-              </div>
-              <div> {m.mine && m.status === 'sending'
-                ? <div className='rounded-lg px-4 py-2 bg-yellow-600'>
-                  {m.deleted ? <span className="italic text-zinc-200">**message deleted**</span> : m.text}
-                </div>
-                : <div className='rounded-lg px-4 py-2 bg-blue-600'>
-                  {m.deleted ? <span className="italic text-zinc-200">**message deleted**</span> : m.text} </div>
-              }
-              </div>
-            </div>
-            {m.mine && m.id != null && !m.deleted && (
-              <button
-                onClick={() => deleteMessage(m.id)}
-                className="self-start text-xs text-zinc-500 hover:text-red-400 cursor-pointer"
-              >
-                delete
-              </button>
-            )}
+            <MessageBubble message={m} onDelete={deleteMessage} />
           </div>
         ))}
       </div>
