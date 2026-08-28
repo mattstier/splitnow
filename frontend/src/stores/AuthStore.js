@@ -1,16 +1,13 @@
 import { create } from 'zustand'
 import { authService } from '../services/AuthService.js'
+import { decodeJWT } from '../utils/JWT.js'
 
 export const useAuthStore = create((set, get) => ({
   token: localStorage.getItem('token') || '',
   loginError: '',
 
   get username() {
-    try {
-      return JSON.parse(atob(get().token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).username
-    } catch {
-      return ''
-    }
+    return decodeJWT(get().token)?.username || ''
   },
 
   register: (email, username, password) => {
