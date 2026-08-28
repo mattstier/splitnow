@@ -113,8 +113,13 @@ export default function ChatRoomView() {
               <div className={`text-xs text-zinc-500 mb-1 ${m.mine ? 'text-right' : 'text-left'}`}>
                 {m.sender} · {formatTime(m.created_at)}
               </div>
-              <div className={`rounded-lg px-4 py-2 ${m.mine ? 'bg-blue-600' : 'bg-zinc-800'}`}>
-                {m.deleted ? <span className="italic text-zinc-200">**message deleted**</span> : m.text}
+              <div> {m.mine && m.status === 'sending'
+                ? <div className='rounded-lg px-4 py-2 bg-yellow-600'>
+                  {m.deleted ? <span className="italic text-zinc-200">**message deleted**</span> : m.text}
+                </div>
+                : <div className='rounded-lg px-4 py-2 bg-blue-600'>
+                  {m.deleted ? <span className="italic text-zinc-200">**message deleted**</span> : m.text} </div>
+              }
               </div>
             </div>
             {m.mine && m.id != null && !m.deleted && (

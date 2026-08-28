@@ -23,6 +23,7 @@ export const useChatStore = create((set, get) => ({
       text: m.content,
       sender: m.sender,
       created_at: m.created_at,
+      status: "sent",
       mine: m.sender === myUsername
     }))
   },
@@ -76,6 +77,7 @@ export const useChatStore = create((set, get) => ({
         text: content,
         sender: 'You',
         created_at: new Date().toISOString(),
+        status: 'sending',
         mine: true
       }],
       input: ''
