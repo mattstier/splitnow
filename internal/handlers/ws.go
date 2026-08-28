@@ -251,10 +251,9 @@ func (room *chatRoom) consume() {
 		}
 		body, _ := json.Marshal(p.Message)
 		room.mu.Lock()
-		for other := range room.conns {
-			if other.id != p.SenderID {
-				other.conn.WriteMessage(websocket.TextMessage, body)
-			}
+		// broadcast message to everyone, incl. the sender
+		for member := range room.conns {
+			member.conn.WriteMessage(websocket.TextMessage, body)
 		}
 		room.mu.Unlock()
 	}
