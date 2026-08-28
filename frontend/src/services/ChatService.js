@@ -14,6 +14,6 @@ export const chatService = {
 
   disconnect: () => { if (ws) { ws.close(); ws = null } },
 
-  send: (roomID, content) => ws.send(JSON.stringify({ type: 'send', room: roomID, content })),
+  send: (roomID, content, clientMsgID) => ws.send(JSON.stringify({ type: 'send', room: roomID, content, client_msg_id: clientMsgID })),
   deleteMessage: (roomID, messageID) => ws.send(JSON.stringify({ type: 'delete', room: roomID, message: messageID })),
 }

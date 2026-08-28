@@ -71,7 +71,12 @@ export const useChatStore = create((set, get) => ({
 
   // send a message over WebSocket and optimistically add it to the list
   send: (roomID, content) => {
-    chatService.send(roomID, content)
+    // idempotency key for the pending messages
+    // which is a temporary (probabilistically) unique ID of the client used when
+    // reconciling optimistic messages with the server
+    const clientMsgID = crypto.randomUUID();
+
+    chatService.send(roomID, content, clientMsgID)
     set(s => ({
       messages: [...s.messages, {
         text: content,
