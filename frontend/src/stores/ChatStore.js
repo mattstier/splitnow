@@ -10,6 +10,7 @@ export const useChatStore = create((set, get) => ({
   input: '',
   lastError: null,
   lastPendingMessage: null,
+  isConnected: false,
 
   setInput: (value) => set({ input: value }),
 
@@ -68,6 +69,8 @@ export const useChatStore = create((set, get) => ({
       .catch(() => set({ messages: [] }))
   },
 
+  onStatusChange: (connected) => set({ isConnected: connected }),
+
   // open a WebSocket connection to receive live messages
   connect: (token, roomID) => {
     const myUsername = useAuthStore.getState().username
@@ -83,13 +86,22 @@ export const useChatStore = create((set, get) => ({
       // skip messages without content (e.g.: pings)
       if (msg.content === undefined) return
       get().mergeMessage(msg, myUsername)
-    })
+    }, get().onStatusChange)
   },
 
   disconnect: () => chatService.disconnect(),
 
+  // guard for socket-dependent actions (refuse them when offline)
+  whenConnected: (action) => {
+    if (!get().isConnected) {
+      set({ lastError: 'You are offline' })
+      return
+    }
+    action()
+  },
+
   // send a message over WebSocket and optimistically add it to the list
-  send: (roomID, content) => {
+  send: (roomID, content) => get().whenConnected(() => {
     // idempotency key for the pending messages
     // which is a temporary (probabilistically) unique ID of the client used when
     // reconciling optimistic messages with the server
@@ -120,12 +132,12 @@ export const useChatStore = create((set, get) => ({
         input: last ?? s.input // paste back message if it timed out
       }))
     }, defaultTimeout)
-  },
+  }),
 
   // send a delete request over WebSocket
-  deleteMessage: (roomID, messageID) => {
+  deleteMessage: (roomID, messageID) => get().whenConnected(() =>
     chatService.deleteMessage(roomID, messageID)
-  },
+  ),
 
   // load the next page of older messages + prepend them
   loadOlder: () => {

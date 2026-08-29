@@ -19,6 +19,7 @@ export default function ChatRoomView() {
   const scrollRef = useRef(null)
   const loadingOlderRef = useRef(false)
   const lastError = useChatStore(s => s.lastError)
+  const isConnected = useChatStore(s => s.isConnected)
 
   // leaves the current room and returns to the picker
   const leaveRoom = () => {
@@ -77,6 +78,11 @@ export default function ChatRoomView() {
 
   return (
     <div className="relative flex flex-col h-screen bg-zinc-900 text-white">
+      {!isConnected && (
+        <div className="flex items-center gap-2 bg-yellow-900/60 border border-yellow-700 text-yellow-100 px-4 py-2 text-sm">
+          <span>You are currently offline. Reconnecting...</span>
+        </div>
+      )}
       {
         lastError && (
           <div className="flex items-ce messagenter gap-2 bg-red-900/60 border border-red-700 text-red-100 px-4 py-2 text-sm">

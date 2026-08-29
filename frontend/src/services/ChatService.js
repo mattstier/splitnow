@@ -22,24 +22,25 @@ export const chatService = {
   fetchMessages: (roomID) => api.get(`/messages?room=${roomID}`),
   fetchPage: (url) => api.get(url),
 
-  connect: (token, roomID, onMessage) => {
+  connect: (token, roomID, onMessage, onStatusChange) => {
     let retryAttempt = 0
 
     const open = () => {
       let webSocket = new WebSocket(`ws://${window.location.host}/ws?token=${token}`)
       webSocket.onopen = () => {
         retryAttempt = 0 // reset the backoff on successful connection
+        onStatusChange(true)
         webSocket.send(JSON.stringify({ type: 'subscribe', room: roomID }))
       }
       webSocket.onmessage = (e) => onMessage(JSON.parse(e.data))
       webSocket.onclose = () => {
+        onStatusChange(false)
         if (webSocket !== ws) return
         // give up after maxAttempts
         if (retryAttempt >= wsRetrySetup.maxAttemptCount) return
         // use the backoff delay
         retryTimer = setTimeout(open, retryInterval(retryAttempt, wsRetrySetup))
         retryAttempt++
-        console.log(`Retry attemp ${retryAttempt}`)
       }
       webSocket.onerror = () => webSocket.close()
       ws = webSocket
