@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -320,6 +321,7 @@ func WS(s Store, redisClient *redis.Client) gin.HandlerFunc {
 			case "unsubscribe":
 				deps.handleUnsubscribe(client, frame)
 			case "send":
+				time.Sleep(2 * time.Second)
 				deps.handleSendMessage(client, frame)
 			case "delete":
 				var df deleteFrame

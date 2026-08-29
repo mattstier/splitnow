@@ -11,7 +11,9 @@ export const useChatStore = create((set, get) => ({
 
   input: '',
 
-  pendingMessage: null,
+  lastError: null,
+
+  lastPendingMessage: null,
 
   setInput: (value) => set({ input: value }),
 
@@ -32,6 +34,7 @@ export const useChatStore = create((set, get) => ({
       if (pendingIdx !== -1) {
         const next = [...s.messages]
         next[pendingIdx] = confirmedMsg
+        set({ lastError: null }) // clear error
         return { messages: next }
       }
 
@@ -97,7 +100,7 @@ export const useChatStore = create((set, get) => ({
     const clientMsgID = crypto.randomUUID();
 
     // set pending message as current
-    set({ pendingMessage: content })
+    set({ lastPendingMessage: content })
 
     chatService.send(roomID, content, clientMsgID)
     set(s => ({
@@ -112,11 +115,11 @@ export const useChatStore = create((set, get) => ({
       input: ''
     }))
 
-    // mark timed out messages as failed
-    // timeout:
     setTimeout(() => {
-      const last = get().pendingMessage
+      const last = get().lastPendingMessage
       set(s => ({
+        lastError: "Sending message timed out",
+        // mark timed out messages as failed
         messages: s.messages.map(m => m.client_msg_id === clientMsgID ? { ...m, status: 'failed' } : m),
         input: last ?? s.input // paste back message if it timed out
       }))

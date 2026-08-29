@@ -18,6 +18,7 @@ export default function ChatRoomView() {
   const [showBottomBtn, setShowBottomBtn] = useState(false)
   const scrollRef = useRef(null)
   const loadingOlderRef = useRef(false)
+  const lastError = useChatStore(s => s.lastError)
 
   // leaves the current room and returns to the picker
   const leaveRoom = () => {
@@ -76,6 +77,13 @@ export default function ChatRoomView() {
 
   return (
     <div className="relative flex flex-col h-screen bg-zinc-900 text-white">
+      {
+        lastError && (
+          <div className="flex items-ce messagenter gap-2 bg-red-900/60 border border-red-700 text-red-100 px-4 py-2 text-sm">
+            <span>Failed to send message</span>
+          </div>
+        )
+      }
       <div className="border-b border-zinc-700 p-4 flex items-center gap-3">
         <SecondaryButton
           className="px-3 py-1 text-sm"
