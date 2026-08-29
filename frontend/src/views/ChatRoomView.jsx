@@ -101,13 +101,15 @@ export default function ChatRoomView() {
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((m, i) => (
+        {messages
+          .filter((m) => m.status !== 'failed')
+          .map((m, i) => (
 
-          // skip rendering offscreen rows so long history stays smooth
-          <div key={i} className={`[content-visibility:auto] flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
-            <MessageBubble message={m} onDelete={deleteMessage} />
-          </div>
-        ))}
+            // skip rendering offscreen rows so long history stays smooth
+            <div key={i} className={`[content-visibility:auto] flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
+              <MessageBubble key={i} message={m} onDelete={deleteMessage} />
+            </div>
+          ))}
       </div>
 
       <div className="border-t border-zinc-700 p-4 flex gap-2">

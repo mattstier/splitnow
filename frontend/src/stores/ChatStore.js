@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { chatService } from '../services/ChatService.js'
 import { useAuthStore } from './AuthStore.js'
+import { defaultTimeout } from '../utils/Time.js'
 
 export const useChatStore = create((set, get) => ({
   messages: [],
@@ -9,6 +10,8 @@ export const useChatStore = create((set, get) => ({
   nextLink: null,
 
   input: '',
+
+  pendingMessage: null,
 
   setInput: (value) => set({ input: value }),
 
@@ -93,6 +96,9 @@ export const useChatStore = create((set, get) => ({
     // reconciling optimistic messages with the server
     const clientMsgID = crypto.randomUUID();
 
+    // set pending message as current
+    set({ pendingMessage: content })
+
     chatService.send(roomID, content, clientMsgID)
     set(s => ({
       messages: [...s.messages, {
@@ -105,6 +111,16 @@ export const useChatStore = create((set, get) => ({
       }],
       input: ''
     }))
+
+    // mark timed out messages as failed
+    // timeout:
+    setTimeout(() => {
+      const last = get().pendingMessage
+      set(s => ({
+        messages: s.messages.map(m => m.client_msg_id === clientMsgID ? { ...m, status: 'failed' } : m),
+        input: last ?? s.input // paste back message if it timed out
+      }))
+    }, defaultTimeout)
   },
 
   // send a delete request over WebSocket
