@@ -34,8 +34,8 @@ export const chatService = {
       }
       webSocket.onmessage = (e) => onMessage(JSON.parse(e.data))
       webSocket.onclose = () => {
-        onStatusChange(false)
         if (webSocket !== ws) return
+        onStatusChange(false)
         // give up after maxAttempts
         if (retryAttempt >= wsRetrySetup.maxAttemptCount) return
         // use the backoff delay
