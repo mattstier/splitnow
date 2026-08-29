@@ -5,14 +5,10 @@ import { defaultTimeout } from '../utils/Time.js'
 
 export const useChatStore = create((set, get) => ({
   messages: [],
-
   // URL for the next page of older messages
   nextLink: null,
-
   input: '',
-
   lastError: null,
-
   lastPendingMessage: null,
 
   setInput: (value) => set({ input: value }),
