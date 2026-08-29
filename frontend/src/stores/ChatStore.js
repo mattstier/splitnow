@@ -14,6 +14,28 @@ export const useChatStore = create((set, get) => ({
 
   clearChat: () => set({ messages: [], nextLink: null, input: '' }),
 
+  mergeMessage: (msg, myUsername) => {
+    set(s => {
+      const pendingIdx = s.messages.findIndex(m => m.client_msg_id === msg.client_msg_id)
+      const confirmedMsg = {
+        id: msg.id,
+        deleted: false,
+        text: msg.content,
+        sender: msg.sender,
+        created_at: msg.created_at,
+        status: 'received',
+        mine: msg.sender === myUsername
+      }
+      if (pendingIdx !== -1) {
+        const next = [...s.messages]
+        next[pendingIdx] = confirmedMsg
+        return { messages: next }
+      }
+
+      // if its not ours, append it
+      return { messages: [...s.messages, confirmedMsg] }
+    })
+  },
   // map raw API messages into our format with a 'mine' flag
   _mapMessages: (rawMessages) => {
     const myUsername = useAuthStore.getState().username
@@ -33,7 +55,11 @@ export const useChatStore = create((set, get) => ({
     chatService.fetchMessages(roomID)
       .then(res => {
         set({
-          messages: get()._mapMessages(res.data.data).slice().reverse(), // API returns newest first, we want oldest first
+          messages:
+            get()
+              ._mapMessages(res.data.data)
+              .slice()
+              .reverse(), // API returns newest first, we want oldest first
           nextLink: res.data.links.next || null
         })
       })
@@ -43,27 +69,18 @@ export const useChatStore = create((set, get) => ({
   // open a WebSocket connection to receive live messages
   connect: (token, roomID) => {
     const myUsername = useAuthStore.getState().username
-    chatService.connect(token, roomID, (d) => {
-      if (d.deleted) {
+    chatService.connect(token, roomID, (msg) => {
+      if (msg.deleted) {
         set(s => ({
           messages: s.messages.map(m =>
-            m.id === d.id ? { ...m, deleted: true, text: '' } : m
+            m.id === msg.id ? { ...m, deleted: true, text: '' } : m
           )
         }))
         return
       }
       // skip messages without content (e.g.: pings)
-      if (d.content === undefined) return
-      set(s => ({
-        messages: [...s.messages, {
-          id: d.id,
-          deleted: false,
-          text: d.content,
-          sender: d.sender,
-          created_at: d.created_at,
-          mine: d.sender === myUsername // mine flag to display own messages differently
-        }]
-      }))
+      if (msg.content === undefined) return
+      get().mergeMessage(msg, myUsername)
     })
   },
 
@@ -83,6 +100,7 @@ export const useChatStore = create((set, get) => ({
         sender: 'You',
         created_at: new Date().toISOString(),
         status: 'pending',
+        client_msg_id: clientMsgID,
         mine: true
       }],
       input: ''
