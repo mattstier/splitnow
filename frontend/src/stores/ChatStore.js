@@ -9,12 +9,17 @@ export const useChatStore = create((set, get) => ({
   nextLink: null,
   input: '',
   lastError: null,
+  sendTimeout: null,
   lastPendingMessage: null,
   isConnected: false,
 
   setInput: (value) => set({ input: value }),
 
-  clearChat: () => set({ messages: [], nextLink: null, input: '' }),
+  clearChat: () => {
+    // clear timeout timer
+    clearTimeout(get().sendTimeout)
+    set({ messages: [], nextLink: null, input: '', sendTimeout: null })
+  },
 
   mergeMessage: (msg, myUsername) => {
     set(s => {
@@ -29,6 +34,10 @@ export const useChatStore = create((set, get) => ({
         mine: msg.sender === myUsername
       }
       if (pendingIdx !== -1) {
+        // reset timeout timer on actual merge
+        clearTimeout(get().sendTimeout)
+        set({ sendTimeout: null })
+
         const next = [...s.messages]
         next[pendingIdx] = confirmedMsg
         set({ lastError: null }) // clear error
@@ -123,7 +132,9 @@ export const useChatStore = create((set, get) => ({
       input: ''
     }))
 
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      // reset timer before use
+      clearTimeout(timer)
       const last = get().lastPendingMessage
       set(s => ({
         lastError: "Sending message timed out",
@@ -132,7 +143,10 @@ export const useChatStore = create((set, get) => ({
         input: last ?? s.input // paste back message if it timed out
       }))
     }, defaultTimeout)
+    // keep the timer handle so the echo confirmation can cancel it
+    set({ sendTimeout: timer })
   }),
+
 
   // send a delete request over WebSocket
   deleteMessage: (roomID, messageID) => get().whenConnected(() =>
