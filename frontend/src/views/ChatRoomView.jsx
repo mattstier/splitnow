@@ -5,11 +5,8 @@ import { useRef, useState, useEffect } from 'react'
 import InputField from '../components/InputField.jsx'
 import PrimaryButton from '../components/PrimaryButton.jsx'
 import SecondaryButton from '../components/SecondaryButton.jsx'
-
-const formatTime = (ts) => {
-  if (!ts) return ''
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
+import MessageBubble from '../components/MessageBubble.jsx'
+import Banner from '../components/Banner.jsx'
 
 // chatroom view
 export default function ChatRoomView() {
@@ -22,6 +19,8 @@ export default function ChatRoomView() {
   const [showBottomBtn, setShowBottomBtn] = useState(false)
   const scrollRef = useRef(null)
   const loadingOlderRef = useRef(false)
+  const lastError = useChatStore(s => s.lastError)
+  const isConnected = useChatStore(s => s.isConnected)
 
   // leaves the current room and returns to the picker
   const leaveRoom = () => {
@@ -80,6 +79,14 @@ export default function ChatRoomView() {
 
   return (
     <div className="relative flex flex-col h-screen bg-zinc-900 text-white">
+      {!isConnected && (
+        <Banner tone="offline">You are currently offline. Reconnecting...</Banner>
+      )}
+      {
+        lastError && (
+          <Banner tone="error"> Failed to send message </Banner>
+        )
+      }
       <div className="border-b border-zinc-700 p-4 flex items-center gap-3">
         <SecondaryButton
           className="px-3 py-1 text-sm"
@@ -105,28 +112,15 @@ export default function ChatRoomView() {
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((m, i) => (
+        {messages
+          .filter((m) => m.status !== 'failed')
+          .map((m, i) => (
 
-          // skip rendering offscreen rows so long history stays smooth
-          <div key={i} className={`[content-visibility:auto] flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
-            <div className="max-w-[80%]">
-              <div className={`text-xs text-zinc-500 mb-1 ${m.mine ? 'text-right' : 'text-left'}`}>
-                {m.sender} · {formatTime(m.created_at)}
-              </div>
-              <div className={`rounded-lg px-4 py-2 ${m.mine ? 'bg-blue-600' : 'bg-zinc-800'}`}>
-                {m.deleted ? <span className="italic text-zinc-200">**message deleted**</span> : m.text}
-              </div>
+            // skip rendering offscreen rows so long history stays smooth
+            <div key={i} className={`[content-visibility:auto] flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
+              <MessageBubble key={i} message={m} onDelete={deleteMessage} />
             </div>
-            {m.mine && m.id != null && !m.deleted && (
-              <button
-                onClick={() => deleteMessage(m.id)}
-                className="self-start text-xs text-zinc-500 hover:text-red-400 cursor-pointer"
-              >
-                delete
-              </button>
-            )}
-          </div>
-        ))}
+          ))}
       </div>
 
       <div className="border-t border-zinc-700 p-4 flex gap-2">

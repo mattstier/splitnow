@@ -455,7 +455,7 @@ func TestWSUnsubscribe(t *testing.T) {
 }
 
 // test that a message is delivered to other room members, but not echoed to the sender
-func TestWSDeliveryNoEcho(t *testing.T) {
+func TestWSDelivery(t *testing.T) {
 	store := mocks.NewStore(t)
 	store.EXPECT().RoomExists(1).Return(true, nil).Times(2)
 	store.EXPECT().
@@ -492,11 +492,12 @@ func TestWSDeliveryNoEcho(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "hello", got.Content)
 
-	// the sender does not get an echo of its own message
-	sender.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	// the sender gets back their message 
+	sender.SetReadDeadline(time.Now().Add(time.Second))
 	var echo types.Message
 	err = sender.ReadJSON(&echo)
-	assert.Error(t, err, "sender should not receive its own message")
+	assert.NoError(t, err)
+	assert.Equal(t, "hello", echo.Content)
 }
 
 // test that deleting without subscribing first returns an error frame

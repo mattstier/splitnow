@@ -67,9 +67,10 @@ func getChatRoom(roomID int) *chatRoom {
 
 // incoming frames from the client
 type msgFrame struct {
-	Type    string `json:"type"`
-	Room    int    `json:"room"`
-	Content string `json:"content"`
+	Type        string `json:"type"`
+	Room        int    `json:"room"`
+	Content     string `json:"content"`
+	ClientMsgID string `json:"client_msg_id"`
 }
 
 type deleteFrame struct {
@@ -88,8 +89,9 @@ type errorFrame struct {
 // pubPayload is what gets published to a room's redis channel:
 // the saved message plus the sender id so consumers can skip the echo
 type pubPayload struct {
-	SenderID string        `json:"sender_id"`
-	Message  types.Message `json:"message"`
+	SenderID    string        `json:"sender_id"`
+	Message     types.Message `json:"message"`
+	ClientMsgID string        `json:"client_msg_id"`
 }
 
 func (room *chatRoom) join(client *wsClient, rdb *redis.Client) {
@@ -114,8 +116,13 @@ func (room *chatRoom) leave(client *wsClient) {
 	}
 }
 
-func (room *chatRoom) sendMessage(sender *wsClient, rdb *redis.Client, msg types.Message) {
-	payload, _ := json.Marshal(pubPayload{SenderID: sender.id, Message: msg})
+func (room *chatRoom) sendMessage(sender *wsClient, rdb *redis.Client, msg types.Message, clientMsgID string) {
+	payload, _ := json.Marshal(
+		pubPayload{
+			SenderID:    sender.id,
+			Message:     msg,
+			ClientMsgID: clientMsgID,
+		})
 	if err := rdb.Publish(context.Background(), "room:"+strconv.Itoa(room.id), payload).Err(); err != nil {
 		println("publish:", err)
 	}
@@ -195,7 +202,7 @@ func (ws wsDeps) handleSendMessage(client *wsClient, frame msgFrame) {
 		return
 	}
 	room := getChatRoom(frame.Room)
-	room.sendMessage(client, ws.redisClient, saved)
+	room.sendMessage(client, ws.redisClient, saved, frame.ClientMsgID)
 }
 
 func (ws wsDeps) handleDeleteMessage(client *wsClient, frame deleteFrame) {
@@ -249,12 +256,17 @@ func (room *chatRoom) consume() {
 			println("bad payload:", err)
 			continue
 		}
-		body, _ := json.Marshal(p.Message)
+		// flatten the client_msg_id onto the message frame so clients can
+		// reconcile their optimistic send with the confirmed echo
+		buf, _ := json.Marshal(p.Message)
+		var body map[string]any
+		json.Unmarshal(buf, &body)
+		body["client_msg_id"] = p.ClientMsgID
+		out, _ := json.Marshal(body)
 		room.mu.Lock()
-		for other := range room.conns {
-			if other.id != p.SenderID {
-				other.conn.WriteMessage(websocket.TextMessage, body)
-			}
+		// broadcast message to everyone, incl. the sender
+		for member := range room.conns {
+			member.conn.WriteMessage(websocket.TextMessage, out)
 		}
 		room.mu.Unlock()
 	}
