@@ -56,8 +56,12 @@ export const useChatStore = create((set, get) => ({
   },
 
   // maps all newly fetched messages to our frontend message format
+  // and reverses the API response to display correctly
   _mapFetchedMessages: (rawMessages) => {
-    return rawMessages.map(m => (get()._toConfirmedMessage(m)))
+    return rawMessages
+      .map(m => (get()._toConfirmedMessage(m)))
+      .slice()
+      .reverse() // API returns newest first, we want oldest first
   },
 
   // fetch the first page of messages when entering a room
@@ -66,10 +70,7 @@ export const useChatStore = create((set, get) => ({
       .then(res => {
         set({
           messages:
-            get()
-              ._mapFetchedMessages(res.data.data)
-              .slice()
-              .reverse(), // API returns newest first, we want oldest first
+            get()._mapFetchedMessages(res.data.data),
           nextLink: res.data.links.next || null
         })
       })
@@ -158,7 +159,7 @@ export const useChatStore = create((set, get) => ({
       const page = res.data
       set(s => ({
         // prepend older messages in front of existing ones
-        messages: [...get()._mapFetchedMessages(page.data).slice().reverse(), ...s.messages],
+        messages: [...get()._mapFetchedMessages(page.data), ...s.messages],
         nextLink: page.links.next || null
       }))
     })
