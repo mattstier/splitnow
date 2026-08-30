@@ -11,7 +11,9 @@ export const useChatStore = create((set, get) => ({
   lastError: null,
   sendTimeout: null,
   lastPendingMessage: null,
-  isConnected: false,
+  // we assume that ws connection succeeded, until proven otherwise
+  // to optimistically (not) render the connection error banner
+  isConnected: true,
 
   setInput: (value) => set({ input: value }),
 
