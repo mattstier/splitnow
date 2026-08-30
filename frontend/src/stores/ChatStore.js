@@ -23,18 +23,10 @@ export const useChatStore = create((set, get) => ({
     set({ messages: [], nextLink: null, input: '', sendTimeout: null })
   },
 
-  mergeMessage: (msg, myUsername) => {
+  mergeMessage: (msg) => {
     set(s => {
       const pendingIdx = s.messages.findIndex(m => m.client_msg_id === msg.client_msg_id)
-      const confirmedMsg = {
-        id: msg.id,
-        deleted: false,
-        text: msg.content,
-        sender: msg.sender,
-        created_at: msg.created_at,
-        status: 'received',
-        mine: msg.sender === myUsername
-      }
+      const confirmedMsg = get()._toConfirmedMessage(msg)
       if (pendingIdx !== -1) {
         // reset timeout timer on actual merge
         clearTimeout(get().sendTimeout)
@@ -50,18 +42,22 @@ export const useChatStore = create((set, get) => ({
       return { messages: [...s.messages, confirmedMsg] }
     })
   },
-  // map raw API messages into our format with a 'mine' flag
-  _mapMessages: (rawMessages) => {
+
+  // map a single raw API message into our format with a 'mine' flag
+  // and received status
+  _toConfirmedMessage: (rawMessage) => {
     const myUsername = useAuthStore.getState().username
-    return rawMessages.map(m => ({
-      id: m.id,
-      deleted: m.deleted,
-      text: m.content,
-      sender: m.sender,
-      created_at: m.created_at,
+    return {
+      ...rawMessage,
+      text: rawMessage.content,
       status: "received",
-      mine: m.sender === myUsername
-    }))
+      mine: rawMessage.sender === myUsername
+    }
+  },
+
+  // maps all newly fetched messages to our frontend message format
+  _mapFetchedMessages: (rawMessages) => {
+    return rawMessages.map(m => (get()._toConfirmedMessage(m)))
   },
 
   // fetch the first page of messages when entering a room
@@ -71,7 +67,7 @@ export const useChatStore = create((set, get) => ({
         set({
           messages:
             get()
-              ._mapMessages(res.data.data)
+              ._mapFetchedMessages(res.data.data)
               .slice()
               .reverse(), // API returns newest first, we want oldest first
           nextLink: res.data.links.next || null
@@ -84,7 +80,6 @@ export const useChatStore = create((set, get) => ({
 
   // open a WebSocket connection to receive live messages
   connect: (token, roomID) => {
-    const myUsername = useAuthStore.getState().username
     chatService.connect(token, roomID, (msg) => {
       if (msg.deleted) {
         set(s => ({
@@ -96,7 +91,7 @@ export const useChatStore = create((set, get) => ({
       }
       // skip messages without content (e.g.: pings)
       if (msg.content === undefined) return
-      get().mergeMessage(msg, myUsername)
+      get().mergeMessage(msg)
     }, get().onStatusChange)
   },
 
@@ -163,7 +158,7 @@ export const useChatStore = create((set, get) => ({
       const page = res.data
       set(s => ({
         // prepend older messages in front of existing ones
-        messages: [...get()._mapMessages(page.data).slice().reverse(), ...s.messages],
+        messages: [...get()._mapFetchedMessages(page.data).slice().reverse(), ...s.messages],
         nextLink: page.links.next || null
       }))
     })
