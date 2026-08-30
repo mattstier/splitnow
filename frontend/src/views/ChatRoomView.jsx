@@ -6,6 +6,7 @@ import InputField from '../components/InputField.jsx'
 import PrimaryButton from '../components/PrimaryButton.jsx'
 import SecondaryButton from '../components/SecondaryButton.jsx'
 import MessageBubble from '../components/MessageBubble.jsx'
+import Banner from '../components/Banner.jsx'
 
 // chatroom view
 export default function ChatRoomView() {
@@ -79,15 +80,11 @@ export default function ChatRoomView() {
   return (
     <div className="relative flex flex-col h-screen bg-zinc-900 text-white">
       {!isConnected && (
-        <div className="flex items-center gap-2 bg-yellow-900/60 border border-yellow-700 text-yellow-100 px-4 py-2 text-sm">
-          <span>You are currently offline. Reconnecting...</span>
-        </div>
+        <Banner tone="offline">You are currently offline. Reconnecting...</Banner>
       )}
       {
         lastError && (
-          <div className="flex items-ce messagenter gap-2 bg-red-900/60 border border-red-700 text-red-100 px-4 py-2 text-sm">
-            <span>Failed to send message</span>
-          </div>
+          <Banner tone="error"> Failed to send message </Banner>
         )
       }
       <div className="border-b border-zinc-700 p-4 flex items-center gap-3">
