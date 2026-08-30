@@ -34,8 +34,7 @@ export const useChatStore = create((set, get) => ({
 
         const next = [...s.messages]
         next[pendingIdx] = confirmedMsg
-        set({ lastError: null }) // clear error
-        return { messages: next }
+        return { messages: next, lastError: null } // clear error
       }
 
       // if its not ours, append it

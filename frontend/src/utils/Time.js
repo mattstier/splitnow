@@ -4,4 +4,4 @@ export const formatTime = (ts) => {
 }
 
 // timeout in millis
-export const defaultTimeout = 1500
+export const defaultTimeout = 4000
