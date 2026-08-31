@@ -52,3 +52,35 @@ describe('fetchRooms', () => {
     expect(useRoomStore.getState().rooms).toEqual([])
   })
 })
+
+describe('createRoom', () => {
+  it('creates a room and adds it to lists', async () => {
+    roomService.createRoom.mockResolvedValue({
+      data: { id: 3, name: 'New Room' }
+    })
+
+    await useRoomStore.getState().createRoom('New Room')
+
+    const state = useRoomStore.getState()
+    // check that it is in the list of all rooms
+    expect(state.rooms).toContainEqual({ id: 3, name: 'New Room' })
+    // check that it is under myRooms
+    expect(state.myRooms).toContainEqual({ id: 3, name: 'New Room' })
+    // check that we automatically go to the room
+    expect(state.room).toEqual({ id: 3, name: 'New Room' })
+  })
+
+  it('creates a room but return fails', async () => {
+    roomService.createRoom.mockRejectedValue(
+      new Error('Network Error')
+    )
+
+    await useRoomStore.getState().createRoom('New Room')
+
+    const state = useRoomStore.getState()
+    expect(state.rooms).toEqual([])
+    expect(state.myRooms).toEqual([])
+    expect(state.room).toBeNull()
+  })
+
+})
