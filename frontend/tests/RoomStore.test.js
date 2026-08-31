@@ -16,7 +16,7 @@ import { roomService } from '../src/services/RoomService.js'
 
 beforeEach(() => {
   // reset store between tests
-  useRoomStore.setState({ rooms: [], myRooms: [], room: null, newRoomName: '' })
+  useRoomStore.setState({ rooms: [], myRooms: [], room: null, newRoomName: '', lastError: null })
   vi.clearAllMocks()
 })
 
@@ -30,6 +30,8 @@ describe('fetchRooms', () => {
       ]
     })
     await useRoomStore.getState().fetchRooms()
+    // assert no error state
+    expect(useRoomStore.getState().lastError).toBeNull()
     expect(useRoomStore.getState().rooms).toEqual(
       [
         { id: 1, name: 'Room1' },
@@ -41,6 +43,8 @@ describe('fetchRooms', () => {
   it('fetch empty rooms return', async () => {
     roomService.fetchRooms.mockResolvedValue({ data: [] })
     await useRoomStore.getState().fetchRooms()
+    // assert no error state
+    expect(useRoomStore.getState().lastError).toBeNull()
     expect(useRoomStore.getState().rooms).toEqual([])
   })
 
@@ -48,6 +52,8 @@ describe('fetchRooms', () => {
     roomService.fetchRooms.mockRejectedValue(new Error('Network Error'))
     // on reject test fails
     await useRoomStore.getState().fetchRooms()
+    // assert error state
+    expect(useRoomStore.getState().lastError).not.toBeNull()
     // check that it leaves rooms unchanged when API fails
     expect(useRoomStore.getState().rooms).toEqual([])
   })
@@ -62,6 +68,9 @@ describe('createRoom', () => {
     await useRoomStore.getState().createRoom('New Room')
 
     const state = useRoomStore.getState()
+
+    // assert no error state
+    expect(useRoomStore.getState().lastError).toBeNull()
     // check that it is in the list of all rooms
     expect(state.rooms).toContainEqual({ id: 3, name: 'New Room' })
     // check that it is under myRooms
@@ -81,6 +90,8 @@ describe('createRoom', () => {
     expect(state.rooms).toEqual([])
     expect(state.myRooms).toEqual([])
     expect(state.room).toBeNull()
+    // assert error state
+    expect(useRoomStore.getState().lastError).not.toBeNull()
   })
 
 })
