@@ -10,3 +10,4 @@ frontend/dist
 cover.out
 auth-service/keys/
 keys/
+*/coverage/
