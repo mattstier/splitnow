@@ -3,7 +3,7 @@ import viteConfig from './vite.config.js'
 
 export default mergeConfig(viteConfig, defineConfig({
   test: {
-    include: ['src/tests/**/*.test.js'],
+    include: ['./tests/**/*.test.js'],
     coverage: { provider: 'v8' }
   },
 }))
