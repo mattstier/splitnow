@@ -8,7 +8,9 @@ export const useRoomStore = create((set, get) => ({
   newRoomName: '',
 
   fetchRooms: () => {
-    roomService.fetchRooms().then(res => set({ rooms: res.data }))
+    roomService.fetchRooms()
+      .then(res => set({ rooms: res.data }))
+      .catch(() => set({ rooms: []}))
   },
 
   fetchMyRooms: () => {

@@ -46,9 +46,8 @@ describe('fetchRooms', () => {
 
   it('fetch empty rooms API error', async () => {
     roomService.fetchRooms.mockRejectedValue(new Error('Network Error'))
-    const rooms = useRoomStore.getState().fetchRooms()
-    // assert that it rejects/throws error
-    await expect(rooms).rejects.toThrow()
+    // on reject test fails
+    await useRoomStore.getState().fetchRooms()
     // check that it leaves rooms unchanged when API fails
     expect(useRoomStore.getState().rooms).toEqual([])
   })
