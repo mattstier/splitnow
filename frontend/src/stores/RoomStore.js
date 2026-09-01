@@ -15,7 +15,7 @@ export const useRoomStore = create((set, get) => ({
   },
 
   fetchMyRooms: () => {
-    roomService.fetchMyRooms()
+    return roomService.fetchMyRooms()
       .then(res => set({ myRooms: res.data, lastError: null }))
       .catch(() => set({ myRooms: [], lastError: 'Failed to fetch subscribed rooms' }))
   },

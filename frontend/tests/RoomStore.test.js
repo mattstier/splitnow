@@ -57,6 +57,33 @@ describe('fetchRooms', () => {
     // check that it leaves rooms unchanged when API fails
     expect(useRoomStore.getState().rooms).toEqual([])
   })
+
+  it('fetches subscribed rooms ', async () => {
+    roomService.fetchMyRooms.mockResolvedValue({
+      data: [
+        { id: 1, name: 'Room1' },
+        { id: 2, name: 'Room2' }
+      ]
+    })
+    await useRoomStore.getState().fetchMyRooms()
+    // assert no error state
+    expect(useRoomStore.getState().lastError).toBeNull()
+    expect(useRoomStore.getState().myRooms).toEqual(
+      [
+        { id: 1, name: 'Room1' },
+        { id: 2, name: 'Room2' }
+      ]
+    )
+  })
+
+  it('fetches subscribed rooms with API error', async () => {
+    roomService.fetchMyRooms.mockRejectedValue(new Error('Network Error'))
+    await useRoomStore.getState().fetchMyRooms()
+    // assert no error state
+    expect(useRoomStore.getState().lastError).not.toBeNull()
+    // assert that myRooms is unchanged (empty) on error
+    expect(useRoomStore.getState().myRooms).toEqual([])
+  })
 })
 
 describe('createRoom', () => {
