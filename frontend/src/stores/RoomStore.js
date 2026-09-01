@@ -35,9 +35,11 @@ export const useRoomStore = create((set, get) => ({
 
   joinRoom: (id) => {
     const joined = get().rooms.find(r => r.id === id)
-    roomService.joinRoom(id).then(res => {
+    return roomService.joinRoom(id).then(res => {
       if (res.status >= 400 && res.status !== 409) return
       if (joined) {
+        // don't add the room if it's already in myRooms
+        if (get().myRooms.some(r => r.id === joined.id)) return
         set(s => ({
           myRooms: [...s.myRooms, joined],
           room: { id: joined.id, name: joined.name },
