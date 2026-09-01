@@ -6,6 +6,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    paths: ['**/*.go', 'go.mod', 'go.sum', 'main.go', 'internal/**', 'db/**', 'sql/**', 'docker-compose.yaml', '.github/workflows/ci.yml']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -20,6 +21,8 @@ jobs:
     defaults:
       run:
         working-directory: auth-service
+    ## only run job on changes in auth dir
+    paths: ['auth-service/**', '.github/workflows/ci.yml']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -29,3 +32,21 @@ jobs:
       - run: go vet ./...
       - run: go test ./... -coverprofile=coverage.out
       - run: go tool cover -func=coverage.out
+  frontend-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    ## only run job on changes in frontend dir
+    paths: ['frontend/**', '.github/workflows/ci.yml'] 
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci ## light, ci-specific npm install 
+      - run: npm run lint
+      - run: npx vitest run
+      - run: npm run build
