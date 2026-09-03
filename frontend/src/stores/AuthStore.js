@@ -38,7 +38,7 @@ export const useAuthStore = create((set, get) => ({
   },
 
   login: (email, password) => {
-    authService
+    return authService
       .login(email, password)
       .then((data) => {
         localStorage.setItem('token', data.token)
