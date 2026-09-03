@@ -11,17 +11,29 @@ export const useAuthStore = create((set, get) => ({
   },
 
   register: (email, username, password) => {
-    authService
+    // flag to track if registration was successful,
+    // so we don't attempt login if it failed
+    let registered = false
+    return authService
       .register(email, username, password)
-      .then(() => authService.login(email, password))
+      .then(() => {
+        registered = true
+        return authService.login(email, password)
+      })
       .then((data) => {
         localStorage.setItem('token', data.token)
         set({ token: data.token, loginError: '' })
       })
       .catch((err) => {
-        if (err.response?.status === 409)
+        if (registered) {
+          set({ loginError: 'failed to log in' })
+        }
+        else if (err.response?.status === 409) {
           set({ loginError: 'username or email already taken' })
-        else set({ loginError: 'registration failed' })
+        }
+        else {
+          set({ loginError: 'registration failed' })
+        }
       })
   },
 
