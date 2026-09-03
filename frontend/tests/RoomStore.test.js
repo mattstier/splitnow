@@ -184,3 +184,64 @@ describe('joinRoom', () => {
     expect(state.room).toBeNull()
   })
 })
+
+describe('leaveRoom', () => {
+  it('leaves a room and removes it from myRooms list', async () => {
+    // seed the room list so the store can find the room to leave
+    useRoomStore.setState({
+      room: { id: 3, name: 'New Room' },
+      myRooms: [{ id: 3, name: 'New Room' }],
+    })
+
+    roomService.leaveRoom.mockResolvedValue({
+      data: { id: 3, name: 'New Room' }
+    })
+
+    await useRoomStore.getState().leaveRoom(3)
+    const state = useRoomStore.getState()
+    // assert no error state
+    expect(state.lastError).toBeNull()
+    // check that current room is reset correctly
+    expect(state.room).toBeNull()
+    // check that it is removed from myRooms
+    expect(state.myRooms).not.toContainEqual({ id: 3, name: 'New Room' })
+  })
+
+  it('leaves a room that is already unselected', async () => {
+    // seed the room as null
+    useRoomStore.setState({
+      room: null,
+    })
+
+    roomService.leaveRoom.mockResolvedValue({
+      data: { id: 3, name: 'New Room' }
+    })
+
+    await useRoomStore.getState().leaveRoom(3)
+    const state = useRoomStore.getState()
+    // assert no error state
+    expect(state.lastError).toBeNull()
+    // check that it is removed from myRooms
+    expect(state.myRooms).not.toContainEqual({ id: 3, name: 'New Room' })
+  })
+
+
+  it('leaves room, fails with an API error', async () => {
+    // seed the room list so the store can find the room to leave
+    useRoomStore.setState({
+      room: { id: 3, name: 'New Room' },
+      myRooms: [{ id: 3, name: 'New Room' }],
+    })
+
+    roomService.leaveRoom.mockRejectedValue(new Error('Network Error'))
+
+    await useRoomStore.getState().leaveRoom(3)
+    const state = useRoomStore.getState()
+    // assert error state
+    expect(state.lastError).not.toBeNull()
+    // check that current room is not changed
+    expect(state.room).toEqual({ id: 3, name: 'New Room' })
+    // check that current myRooms is not changed
+    expect(state.myRooms).toContainEqual({ id: 3, name: 'New Room' })
+  })
+})

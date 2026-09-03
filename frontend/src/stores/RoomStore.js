@@ -53,7 +53,7 @@ export const useRoomStore = create((set, get) => ({
   leaveRoom: () => {
     const room = get().room
     if (!room) return
-    roomService.leaveRoom(room.id).then(() => {
+    return roomService.leaveRoom(room.id).then(() => {
       set(s => ({
         myRooms: s.myRooms.filter(r => r.id !== room.id),
         room: null,
