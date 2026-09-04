@@ -11,11 +11,11 @@ export default function AuthView() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
-  const loginError = useAuthStore((s) => s.loginError)
+  const lastError = useAuthStore((s) => s.lastError)
 
   const submit = mode === 'login'
     ? () => useAuthStore.getState().login(email, password)
-    : () => useAuthStore.getState().register(email, username, password)
+    : () => useAuthStore.getState().registerAndLogin(email, username, password)
 
   return (
     <div className="flex flex-col items-center justify-center h-screen bg-zinc-900 text-white">
@@ -53,11 +53,11 @@ export default function AuthView() {
         </PrimaryButton>
         <SecondaryButton
           className="w-full text-zinc-400 hover:text-white text-sm"
-          onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); useAuthStore.setState({ loginError: '' }) }}
+          onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); useAuthStore.setState({ lastError: '' }) }}
         >
           {mode === 'login' ? 'need an account? Register' : 'have an account? Log in'}
         </SecondaryButton>
-        {loginError && <p className="text-red-500 text-sm text-center">{loginError}</p>}
+        {lastError && <p className="text-red-500 text-sm text-center">{lastError}</p>}
       </div>
     </div>
   )

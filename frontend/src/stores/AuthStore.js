@@ -4,47 +4,41 @@ import { decodeJWT } from '../utils/JWT.js'
 
 export const useAuthStore = create((set, get) => ({
   token: localStorage.getItem('token') || '',
-  loginError: '',
+  lastError: '',
 
   get username() {
     return decodeJWT(get().token)?.username || ''
   },
 
-  register: (email, username, password) => {
-    // flag to track if registration was successful,
-    // so we don't attempt login if it failed
-    let registered = false
+  register: async (email, username, password) => {
     return authService
       .register(email, username, password)
-      .then(() => {
-        registered = true
-        return authService.login(email, password)
-      })
-      .then((data) => {
-        localStorage.setItem('token', data.token)
-        set({ token: data.token, loginError: '' })
-      })
       .catch((err) => {
-        if (registered) {
-          set({ loginError: 'failed to log in' })
-        }
-        else if (err.response?.status === 409) {
-          set({ loginError: 'username or email already taken' })
-        }
-        else {
-          set({ loginError: 'registration failed' })
+        if (err.response?.status === 409) {
+          set({ lastError: 'username or email already taken' })
+        } else {
+          set({ lastError: 'registration failed' })
         }
       })
   },
 
-  login: (email, password) => {
+  login: async (email, password) => {
     return authService
       .login(email, password)
       .then((data) => {
         localStorage.setItem('token', data.token)
-        set({ token: data.token, loginError: '' })
+        set({ token: data.token, lastError: '' })
       })
-      .catch(() => set({ loginError: 'invalid credentials' }))
+      .catch(() => set({ lastError: 'invalid credentials' }))
+  },
+
+  registerAndLogin: async (email, username, password) => {
+    return get()
+      .register(email, username, password)
+      .then(() => get().login(email, password))
+      .catch((err) => {
+        set({ lastError: err.message || 'registration or login failed' })
+      })
   },
 
   logout: () => {
