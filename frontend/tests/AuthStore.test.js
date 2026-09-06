@@ -103,15 +103,13 @@ describe('registerAndLogin', () => {
     // mock register to succeed but login to fail
     authService.register.mockResolvedValue({})
 
-    authService.login.mockRejectedValue(new Error('DB Error'))
+    authService.login.mockRejectedValue({ response: { status: 401 }, message: 'invalid credentials' })
 
     await useAuthStore.getState()
-      .register('johndoe@gmail.com', 'johndoe', 'password123')
+      .registerAndLogin('johndoe@gmail.com', 'johndoe', 'password123')
 
-    // assert that login error is not set to a registration error message
-    // TODO: fix code to check that lastError is set to a login error message and not a registration error message
-    //expect(useAuthStore.getState().lastError).toBeTruthy()
-    //expect(useAuthStore.getState().lastError).not.toContain('registration')
+    expect(useAuthStore.getState().lastError).toBeTruthy()
+    expect(useAuthStore.getState().lastError).not.toContain('registration')
     expect(useAuthStore.getState().token).toBeFalsy()
   })
 })

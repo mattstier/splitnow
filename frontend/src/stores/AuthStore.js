@@ -20,7 +20,7 @@ export const useAuthStore = create((set, get) => ({
       .catch((err) => {
         set({
           registrationSuccessful: false,
-          lastError: err.response?.status === 409 ? 'username or email already taken' : 'an unknown error has occured'
+          lastError: err.response?.status === 409 ? 'username or email already taken' : 'registration failed'
         })
       })
   },
@@ -33,23 +33,17 @@ export const useAuthStore = create((set, get) => ({
         set({ token: data.token, lastError: '' })
       })
       .catch((err) => {
-        if (err.response?.status === 401) {
-          set({ lastError: 'invalid credentials' })
-        } else if (!get().registrationSuccessful) {
-          set({ lastError: 'registration failed' })
-        } else {
-          set({ lastError: 'an unknown error has occured' })
-        }
+        set({
+          registrationSuccessful: false,
+          lastError: err.response?.status === 401 ? 'invalid credentials' : 'login failed'
+        })
       })
   },
 
   registerAndLogin: async (email, username, password) => {
-    return get()
-      .register(email, username, password)
-      .then(() => get().login(email, password))
-      .catch((err) => {
-        set({ lastError: err.message })
-      })
+    await get().register(email, username, password)
+    if (!get().registrationSuccessful) return
+    await get().login(email, password)
   },
 
   logout: () => {
