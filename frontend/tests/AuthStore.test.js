@@ -92,8 +92,7 @@ describe('login', () => {
 
     expect(useAuthStore.getState().token).toBeFalsy()
     expect(useAuthStore.getState().lastError).toBeTruthy()
-    // TODO: fix the logic to check that error is an invalid credentials error and not a network error, since the store currently sets the same error message for both cases
-    // expect(useAuthStore.getState().lastError).not.toContain('credentials')
+    expect(useAuthStore.getState().lastError).not.toContain('credentials')
     expect(useAuthStore.getState().username).toBeFalsy()
   })
 })

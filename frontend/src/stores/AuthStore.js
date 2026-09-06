@@ -5,6 +5,7 @@ import { decodeJWT } from '../utils/JWT.js'
 export const useAuthStore = create((set, get) => ({
   token: localStorage.getItem('token') || '',
   lastError: '',
+  registrationSuccessful: false,
 
   get username() {
     return decodeJWT(get().token)?.username || ''
@@ -13,12 +14,14 @@ export const useAuthStore = create((set, get) => ({
   register: async (email, username, password) => {
     return authService
       .register(email, username, password)
+      .then(() => {
+        set({ registrationSuccessful: true, lastError: '' })
+      })
       .catch((err) => {
-        if (err.response?.status === 409) {
-          set({ lastError: 'username or email already taken' })
-        } else {
-          set({ lastError: 'registration failed' })
-        }
+        set({
+          registrationSuccessful: false,
+          lastError: err.response?.status === 409 ? 'username or email already taken' : 'an unknown error has occured'
+        })
       })
   },
 
@@ -29,7 +32,15 @@ export const useAuthStore = create((set, get) => ({
         localStorage.setItem('token', data.token)
         set({ token: data.token, lastError: '' })
       })
-      .catch(() => set({ lastError: 'invalid credentials' }))
+      .catch((err) => {
+        if (err.response?.status === 401) {
+          set({ lastError: 'invalid credentials' })
+        } else if (!get().registrationSuccessful) {
+          set({ lastError: 'registration failed' })
+        } else {
+          set({ lastError: 'an unknown error has occured' })
+        }
+      })
   },
 
   registerAndLogin: async (email, username, password) => {
@@ -37,7 +48,7 @@ export const useAuthStore = create((set, get) => ({
       .register(email, username, password)
       .then(() => get().login(email, password))
       .catch((err) => {
-        set({ lastError: err.message || 'registration or login failed' })
+        set({ lastError: err.message })
       })
   },
 
