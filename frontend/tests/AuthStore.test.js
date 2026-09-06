@@ -127,3 +127,20 @@ describe('registerAndLogin', () => {
   })
 
 })
+describe('logout', () => {
+  it('logs out the user and clears the token', () => {
+    useAuthStore.getState().logout()
+
+    expect(useAuthStore.getState().token).toBeFalsy()
+    expect(useAuthStore.getState().lastError).toBeFalsy()
+    expect(useAuthStore.getState().username).toBeFalsy()
+  })
+
+  it('is idempotent when called repeatedly', () => {
+    useAuthStore.getState().logout()
+    useAuthStore.getState().logout()
+    expect(useAuthStore.getState().lastError).toBeFalsy()
+    expect(useAuthStore.getState().token).toBeFalsy()
+  })
+})
+
