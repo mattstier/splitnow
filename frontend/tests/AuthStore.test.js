@@ -112,4 +112,18 @@ describe('registerAndLogin', () => {
     expect(useAuthStore.getState().lastError).not.toContain('registration')
     expect(useAuthStore.getState().token).toBeFalsy()
   })
+
+  it('fails to register a user and login is not attempted', async () => {
+    // mock register to succeed but login to fail
+    authService.register.mockRejectedValue({ response: { status: 409 }, message: 'username or email already taken' })
+
+    await useAuthStore.getState()
+      .registerAndLogin('johndoe@gmail.com', 'johndoe', 'password123')
+
+    expect(useAuthStore.getState().lastError).toBeTruthy()
+    expect(authService.login).not.toHaveBeenCalled()
+    expect(useAuthStore.getState().lastError).not.toContain('login')
+    expect(useAuthStore.getState().token).toBeFalsy()
+  })
+
 })
