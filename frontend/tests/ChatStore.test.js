@@ -38,6 +38,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 describe('setInput', () => {
@@ -48,11 +49,13 @@ describe('setInput', () => {
 })
 
 describe('clearChat', () => {
-  it('resets the chat state', () => {
+  it('cancels the pending send timer and resets the chat state', () => {
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
     useChatStore.setState({ messages: [{ id: 1 }], nextLink: '/x', input: 'abc', sendTimeout: 123 })
 
     useChatStore.getState().clearChat()
 
+    expect(clearTimeoutSpy).toHaveBeenCalledWith(123)
     const s = useChatStore.getState()
     expect(s.messages).toEqual([])
     expect(s.nextLink).toBeNull()
