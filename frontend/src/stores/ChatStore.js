@@ -70,10 +70,11 @@ export const useChatStore = create((set, get) => ({
         set({
           messages:
             get()._mapFetchedMessages(res.data.data),
-          nextLink: res.data.links.next || null
+          nextLink: res.data.links.next || null,
+          lastError: null
         })
       })
-      .catch(() => set({ messages: [] }))
+      .catch(() => set({ messages: [], lastError: 'Failed to fetch messages' }))
   },
 
   onStatusChange: (connected) => set({ isConnected: connected }),
@@ -161,6 +162,6 @@ export const useChatStore = create((set, get) => ({
         messages: [...get()._mapFetchedMessages(page.data), ...s.messages],
         nextLink: page.links.next || null
       }))
-    })
+    }).catch(() => set({ lastError: 'Failed to load older messages' }))
   },
 }))

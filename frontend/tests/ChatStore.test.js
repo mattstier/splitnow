@@ -145,7 +145,9 @@ describe('fetchMessages', () => {
 
     // fetchMessages does not return its promise, so wait for the catch handler
     await vi.waitFor(() => {
-      expect(useChatStore.getState().messages).toEqual([])
+      const s = useChatStore.getState()
+      expect(s.messages).toEqual([])
+      expect(s.lastError).toBeTruthy()
     })
   })
 })
@@ -175,6 +177,20 @@ describe('loadOlder', () => {
     expect(chatService.fetchPage).toHaveBeenCalledWith('/messages?page=2')
     expect(s.messages.map(m => m.id)).toEqual([1, 2])
     expect(s.nextLink).toBeNull()
+  })
+
+  it('sets an error when fetching older messages fails', async () => {
+    useChatStore.setState({ messages: [{ id: 2, text: 'existing' }], nextLink: '/messages?page=2' })
+    chatService.fetchPage.mockRejectedValue(new Error('Network Error'))
+
+    await useChatStore.getState().loadOlder()
+
+    // loadOlder does not return its promise, so wait for the catch handler
+    await vi.waitFor(() => {
+      const s = useChatStore.getState()
+      expect(s.lastError).toBeTruthy()
+      expect(s.messages).toEqual([{ id: 2, text: 'existing' }])
+    })
   })
 })
 
