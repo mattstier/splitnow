@@ -4,12 +4,14 @@ import { useEffect } from 'react'
 import InputField from '../components/InputField.jsx'
 import PrimaryButton from '../components/PrimaryButton.jsx'
 import SecondaryButton from '../components/SecondaryButton.jsx'
+import Banner from '../components/Banner.jsx'
 
 // room picker view
 export default function RoomPickerView() {
   const rooms = useRoomStore((s) => s.rooms)
   const myRooms = useRoomStore((s) => s.myRooms)
   const newRoomName = useRoomStore((s) => s.newRoomName)
+  const lastError = useRoomStore((s) => s.lastError)
   const myRoomIds = new Set(myRooms.map(r => r.id))
   const publicRooms = rooms.filter(r => !myRoomIds.has(r.id))
 
@@ -56,9 +58,11 @@ export default function RoomPickerView() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {lastError && <Banner tone="error">{lastError}</Banner>}
+
         <div>
           <h2 className="text-sm font-medium text-zinc-400 mb-2">My rooms</h2>
-          {myRooms.length === 0 && <p className="text-zinc-500">you have not joined any rooms yet</p>}
+          {myRooms.length === 0 && !lastError && <p className="text-zinc-500">you have not joined any rooms yet</p>}
           {myRooms.map(r => (
             <SecondaryButton
               key={r.id}
@@ -72,7 +76,7 @@ export default function RoomPickerView() {
 
         <div>
           <h2 className="text-sm font-medium text-zinc-400 mb-2">All rooms</h2>
-          {publicRooms.length === 0 && <p className="text-zinc-500">no other rooms</p>}
+          {publicRooms.length === 0 && !lastError && <p className="text-zinc-500">no other rooms</p>}
           {publicRooms.map(r => (
             <div
               key={r.id}
