@@ -46,3 +46,13 @@ vite.config.js proxies the API so the browser only talks to the frontend origin,
 Environment vars
 - VITE_API_ENDPOINT -> API base URL, default: relative to the same origin
 ```
+
+## Testing
+
+Store logic and services are tested with **vitest**. Tests live in `tests/`, mock the service layer, and run without a backend:
+
+```bash
+npx vitest run            # run all tests
+npx vitest run --coverage # coverage report
+cd coverage/src           # coverage artefacts
+```
