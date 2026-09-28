@@ -135,7 +135,7 @@ export const useChatStore = create((set, get) => ({
       clearTimeout(timer)
       const last = get().lastPendingMessage
       set(s => ({
-        lastError: "Sending message timed out",
+        lastError: "Failed to send message",
         // mark timed out messages as failed
         messages: s.messages.map(m => m.client_msg_id === clientMsgID ? { ...m, status: 'failed' } : m),
         input: last ?? s.input // paste back message if it timed out
@@ -162,6 +162,6 @@ export const useChatStore = create((set, get) => ({
         messages: [...get()._mapFetchedMessages(page.data), ...s.messages],
         nextLink: page.links.next || null
       }))
-    }).catch(() => set({ lastError: 'Failed to load older messages' }))
+    }).catch(() => set({ lastError: 'Failed to load messages' }))
   },
 }))
