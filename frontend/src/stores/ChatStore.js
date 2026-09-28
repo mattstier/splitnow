@@ -70,10 +70,11 @@ export const useChatStore = create((set, get) => ({
         set({
           messages:
             get()._mapFetchedMessages(res.data.data),
-          nextLink: res.data.links.next || null
+          nextLink: res.data.links.next || null,
+          lastError: null
         })
       })
-      .catch(() => set({ messages: [] }))
+      .catch(() => set({ messages: [], lastError: 'Failed to fetch messages' }))
   },
 
   onStatusChange: (connected) => set({ isConnected: connected }),
@@ -134,7 +135,7 @@ export const useChatStore = create((set, get) => ({
       clearTimeout(timer)
       const last = get().lastPendingMessage
       set(s => ({
-        lastError: "Sending message timed out",
+        lastError: "Failed to send message",
         // mark timed out messages as failed
         messages: s.messages.map(m => m.client_msg_id === clientMsgID ? { ...m, status: 'failed' } : m),
         input: last ?? s.input // paste back message if it timed out
@@ -161,6 +162,6 @@ export const useChatStore = create((set, get) => ({
         messages: [...get()._mapFetchedMessages(page.data), ...s.messages],
         nextLink: page.links.next || null
       }))
-    })
+    }).catch(() => set({ lastError: 'Failed to load messages' }))
   },
 }))

@@ -84,7 +84,7 @@ export default function ChatRoomView() {
       )}
       {
         lastError && (
-          <Banner tone="error"> Failed to send message </Banner>
+          <Banner tone="error">{lastError}</Banner>
         )
       }
       <div className="border-b border-zinc-700 p-4 flex items-center gap-3">
