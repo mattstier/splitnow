@@ -8,8 +8,8 @@ func (Store) RoomExists(roomID int) (bool, error) {
 	return RoomExists(roomID)
 }
 
-func (Store) CreateMessage(roomID int, sender, content string) (types.Message, error) {
-	return CreateMessage(roomID, sender, content)
+func (Store) CreateMessage(roomID int, sender, content string, replyTo *int) (types.Message, error) {
+	return CreateMessage(roomID, sender, content, replyTo)
 }
 
 func (Store) GetMessagesByRoom(roomID, messageID, limit int) ([]types.Message, error) {

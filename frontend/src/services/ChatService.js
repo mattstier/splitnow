@@ -54,6 +54,6 @@ export const chatService = {
     if (ws) { ws.close(); ws = null }
   },
 
-  send: (roomID, content, clientMsgID) => ws.send(JSON.stringify({ type: 'send', room: roomID, content, client_msg_id: clientMsgID })),
+  send: (roomID, content, replyTo = null, clientMsgID) => ws.send(JSON.stringify({ type: 'send', room: roomID, content, client_msg_id: clientMsgID, reply_to: replyTo })),
   deleteMessage: (roomID, messageID) => ws.send(JSON.stringify({ type: 'delete', room: roomID, message: messageID })),
 }

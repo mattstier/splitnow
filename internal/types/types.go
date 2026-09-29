@@ -11,6 +11,7 @@ type Message struct {
 	Sender    string    `json:"sender"`
 	Content   string    `json:"content"`
 	Deleted   bool      `json:"deleted"`
+	ReplyTo   *int      `json:"reply_to"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

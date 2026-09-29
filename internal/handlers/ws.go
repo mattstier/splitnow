@@ -70,6 +70,7 @@ type msgFrame struct {
 	Type        string `json:"type"`
 	Room        int    `json:"room"`
 	Content     string `json:"content"`
+	ReplyTo     *int    `json:"reply_to"`
 	ClientMsgID string `json:"client_msg_id"`
 }
 
@@ -196,7 +197,7 @@ func (ws wsDeps) handleSendMessage(client *wsClient, frame msgFrame) {
 		client.conn.WriteMessage(websocket.TextMessage, data)
 		return
 	}
-	saved, err := ws.store.CreateMessage(frame.Room, client.username, frame.Content)
+	saved, err := ws.store.CreateMessage(frame.Room, client.username, frame.Content, frame.ReplyTo)
 	if err != nil {
 		println("failed to save message:", err)
 		return

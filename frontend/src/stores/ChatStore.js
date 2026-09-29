@@ -108,7 +108,7 @@ export const useChatStore = create((set, get) => ({
   },
 
   // send a message over WebSocket and optimistically add it to the list
-  send: (roomID, content) => get().whenConnected(() => {
+  send: (roomID, content, replyTo = null) => get().whenConnected(() => {
     // idempotency key for the pending messages
     // which is a temporary (probabilistically) unique ID of the client used when
     // reconciling optimistic messages with the server
@@ -117,7 +117,7 @@ export const useChatStore = create((set, get) => ({
     // set pending message as current
     set({ lastPendingMessage: content })
 
-    chatService.send(roomID, content, clientMsgID)
+    chatService.send(roomID, content, replyTo, clientMsgID)
     set(s => ({
       messages: [...s.messages, {
         text: content,
@@ -125,6 +125,7 @@ export const useChatStore = create((set, get) => ({
         created_at: new Date().toISOString(),
         status: 'pending',
         client_msg_id: clientMsgID,
+        reply_to: replyTo,
         mine: true
       }],
       input: ''

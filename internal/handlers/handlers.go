@@ -12,7 +12,7 @@ import (
 )
 
 type Store interface {
-	CreateMessage(roomID int, sender, content string) (types.Message, error)
+	CreateMessage(roomID int, sender, content string, replyTo *int) (types.Message, error)
 	GetMessagesByRoom(roomID, messageID, limit int) ([]types.Message, error)
 	DeleteMessage(messageID, roomID int, sender string) (types.Message, error)
 	CreateRoom(name string, creator int) (types.Room, error)

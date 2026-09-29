@@ -4,6 +4,7 @@ CREATE TABLE messages (
     sender TEXT NOT NULL,
     content TEXT NOT NULL,
     deleted BOOLEAN NOT NULL DEFAULT FALSE, 
+    reply_to INT REFERENCES messages(id),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
