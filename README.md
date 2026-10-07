@@ -86,3 +86,7 @@ npx wscat -c ws://localhost:8080/ws
 docker compose down          # stop containers (keeps db-data volume)
 docker compose down -v       # also delete the local db-data volume/data
 ```
+
+Copyright (c) 2026 Máté Stier. All Rights Reserved.
+
+This repository is made publicly accessible solely for portfolio and demonstration purposes. No permission is granted to copy, modify, redistribute, or use this code for any purpose, commercial or non-commercial.
